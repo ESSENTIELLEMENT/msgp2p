@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this software, protocol, or simulation framework in your research or project, please cite it as below."
+title: "msgp2p: Server-Anchored Delay-Tolerant Opportunistic Group Synchronization over Phone-to-Phone Radios"
+version: 1.0.0
+date-released: 2026-10-26
+url: "https://msgp2p.squares.net"
+repository-code: "https://github.com/ESSENTIELLEMENT/msgp2p"
+license: Apache-2.0
+authors:
+  - name: "msgp2p contributors"
+keywords:
+  - "delay-tolerant-networking"
+  - "mesh-network"
+  - "bluetooth-low-energy"
+  - "wifi-aware"
+  - "version-vectors"
+  - "offline-first"
+  - "flutter"
+  - "dart"
+  - "peer-to-peer"

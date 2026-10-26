@@ -1,0 +1,25 @@
+{
+    "description": "Rotating anonymous BLE beacon tokens computed via HMAC-SHA256",
+    "group_beacon_key_hex": "771726326f8f952122f126098b68b616ac3630f9bd11dce587d6e62899da1327",
+    "rotation_interval_seconds": 900,
+    "samples": [
+        {
+            "timestamp_seconds": 1773822000,
+            "time_window": 1970913,
+            "window_uint32_hex": "001e12e1",
+            "token_16_bytes_hex": "d216d05910846f8d680904e065cd9875"
+        },
+        {
+            "timestamp_seconds": 1773822900,
+            "time_window": 1970914,
+            "window_uint32_hex": "001e12e2",
+            "token_16_bytes_hex": "7f3f18233d0baa4a7c6605ee440d4a90"
+        },
+        {
+            "timestamp_seconds": 1773823800,
+            "time_window": 1970915,
+            "window_uint32_hex": "001e12e3",
+            "token_16_bytes_hex": "9328a4fb620263b0882b65f1d856b5ef"
+        }
+    ]
+}

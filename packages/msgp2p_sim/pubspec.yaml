@@ -1,0 +1,25 @@
+name: msgp2p_sim
+description: Deterministic discrete-event simulator and CLI runner for msgp2p DTN scenarios.
+version: 1.0.0
+homepage: https://msgp2p.squares.net
+repository: https://github.com/ESSENTIELLEMENT/msgp2p/tree/main/packages/msgp2p_sim
+issue_tracker: https://github.com/ESSENTIELLEMENT/msgp2p/issues
+topics:
+  - dtn
+  - simulator
+  - mesh
+publish_to: none
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  msgp2p_core:
+    path: ../msgp2p_core
+  yaml: ^3.1.2
+  args: ^2.5.0
+  meta: ^1.12.0
+
+dev_dependencies:
+  test: ^1.25.0
+  lints: ^4.0.0

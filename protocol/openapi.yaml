@@ -1,0 +1,614 @@
+openapi: 3.1.0
+info:
+  title: msgp2p Central Cloud Sync Gateway API
+  description: >
+    REST API for the msgp2p server-anchored delay-tolerant synchronization gateway.
+    Enables mobile nodes to register cryptographic public keys, authenticate,
+    batch-push offline peer envelopes, pull server-side message deltas, and gossip
+    server receipts (anti-packets) and revocation notices.
+  version: 1.0.0
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  - url: https://api.msgp2p.example.org/api/v1
+    description: Production Gateway
+  - url: http://localhost:8000/api/v1
+    description: Local PHP Development Prototype Server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      summary: Register a new member account and identity public key
+      security: []
+      description: >
+        Registers a user credentials and their device's Ed25519 identity public key.
+        Upon approval, the user can log in to obtain a server-signed membership certificate.
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Username or public key already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      summary: Authenticate and obtain membership certificate and active group keys
+      security: []
+      description: >
+        Validates user credentials and issues an authenticated session token along with
+        a server-signed membership certificate, the current group encryption key epochs,
+        and the rotating group beacon key for BLE advertising.
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /sync/push:
+    post:
+      summary: Batch ingest signed message envelopes from a gateway mule
+      description: >
+        Accepts a batch of canonical CBOR message envelopes gathered by a mobile node.
+        The server verifies certificate validity, author signature, timestamp drift, and
+        deduplicates against already stored messages. Returns accepted message IDs and a
+        signed batch server receipt.
+      operationId: pushEnvelopes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushRequest'
+      responses:
+        '200':
+          description: Batch processed; receipts returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /sync/pull:
+    get:
+      summary: Pull message delta newer than client's version vector
+      description: >
+        Calculates the symmetric difference between the server's message database and the
+        client's provided version vector. Returns missing envelopes in priority and chronological order.
+      operationId: pullEnvelopes
+      parameters:
+        - name: group_id
+          in: query
+          required: true
+          description: 16-byte UUID hex of the group
+          schema:
+            type: string
+            pattern: '^[0-9a-fA-F]{32}$'
+            example: 'a0b1c2d3e4f50123456789abcdef0123'
+        - name: vector
+          in: query
+          required: true
+          description: Base64-encoded canonical CBOR version vector held by client
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of envelopes to return in this page
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+      responses:
+        '200':
+          description: Missing envelopes returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PullResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /sync/receipts:
+    get:
+      summary: Retrieve server-signed receipts (anti-packets)
+      description: >
+        Returns all server receipts issued since the requested timestamp. Relays use these
+        receipts to confirm message delivery to peers and prune stored buffers.
+      operationId: getReceipts
+      parameters:
+        - name: group_id
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9a-fA-F]{32}$'
+        - name: since
+          in: query
+          required: false
+          description: Milliseconds Unix timestamp
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of server receipts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiptsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /sync/revocations:
+    get:
+      summary: Retrieve server-signed member revocations
+      description: >
+        Returns server revocation notices issued since the requested timestamp.
+      operationId: getRevocations
+      parameters:
+        - name: group_id
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9a-fA-F]{32}$'
+        - name: since
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of revocation notices
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevocationsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      summary: Revoke a group member and rotate the group key epoch
+      description: >
+        Issues a server-signed revocation notice for the specified member public key and
+        automatically rotates the group encryption key epoch with a 24h grace period on
+        the previous epoch (FR-ID-05, FR-SEC-02).
+      operationId: revokeMember
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - group_id
+                - member_pubkey
+              properties:
+                group_id:
+                  type: string
+                  pattern: '^[0-9a-fA-F]{32}$'
+                member_pubkey:
+                  type: string
+                  pattern: '^[0-9a-fA-F]{64}$'
+                reason:
+                  type: string
+                  default: 'compromised_credential'
+      responses:
+        '200':
+          description: Member revoked and group key rotated
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /sync/attachments:
+    post:
+      summary: Upload a hash-addressed attachment blob
+      description: >
+        Uploads a binary attachment blob referenced by SHA-256 hash in an envelope's
+        `attachments` array. The server verifies `SHA-256(data) == hash` before storing.
+      operationId: uploadAttachment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - group_id
+                - hash
+                - mime
+                - data_base64
+              properties:
+                group_id:
+                  type: string
+                  pattern: '^[0-9a-fA-F]{32}$'
+                hash:
+                  type: string
+                  pattern: '^[0-9a-fA-F]{64}$'
+                mime:
+                  type: string
+                data_base64:
+                  type: string
+      responses:
+        '200':
+          description: Attachment stored
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    get:
+      summary: Download a hash-addressed attachment blob
+      operationId: getAttachment
+      parameters:
+        - name: group_id
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9a-fA-F]{32}$'
+        - name: hash
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9a-fA-F]{64}$'
+      responses:
+        '200':
+          description: Attachment blob returned
+        '404':
+          description: Attachment not found
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    BadRequest:
+      description: Invalid request payload, malformed CBOR, or validation failure
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - password
+        - group_id
+        - member_pubkey
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 64
+          example: 'alice'
+        password:
+          type: string
+          minLength: 8
+          example: 's3curePassw0rd!'
+        group_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{32}$'
+          example: 'a0b1c2d3e4f50123456789abcdef0123'
+        member_pubkey:
+          type: string
+          pattern: '^[0-9a-fA-F]{64}$'
+          description: 32-byte Ed25519 public key in hex
+          example: 'd75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a'
+
+    RegisterResponse:
+      type: object
+      required:
+        - user_id
+        - status
+      properties:
+        user_id:
+          type: string
+          example: 'usr_981a2b3c'
+        status:
+          type: string
+          enum: [ACTIVE, PENDING_APPROVAL]
+          example: 'ACTIVE'
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          example: 'alice'
+        password:
+          type: string
+          example: 's3curePassw0rd!'
+
+    LoginResponse:
+      type: object
+      required:
+        - access_token
+        - expires_in
+        - server_pubkey
+        - membership_cert
+        - group_beacon_key
+        - group_keys
+      properties:
+        access_token:
+          type: string
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+        expires_in:
+          type: integer
+          example: 86400
+        server_pubkey:
+          type: string
+          pattern: '^[0-9a-fA-F]{64}$'
+          description: Ed25519 public key of server used to verify certificates and receipts
+        membership_cert:
+          $ref: '#/components/schemas/CertificateDto'
+        group_beacon_key:
+          type: string
+          pattern: '^[0-9a-fA-F]{64}$'
+          description: 32-byte secret key used to compute rotating BLE advertisement HMACs
+        group_keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/GroupKeyDto'
+
+    CertificateDto:
+      type: object
+      required:
+        - raw_cbor_base64
+        - cert_ref
+        - group_id
+        - user_id
+        - member_pubkey
+        - noise_pubkey
+        - role
+        - issued_at
+        - expires_at
+      properties:
+        raw_cbor_base64:
+          type: string
+          description: Base64-encoded Canonical CBOR membership certificate
+        cert_ref:
+          type: string
+          pattern: '^[0-9a-fA-F]{64}$'
+          description: SHA-256 hash of the canonical CBOR certificate
+        group_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{32}$'
+        user_id:
+          type: string
+        member_pubkey:
+          type: string
+          pattern: '^[0-9a-fA-F]{64}$'
+          description: 32-byte Ed25519 public signing key in hex
+        noise_pubkey:
+          type: string
+          pattern: '^[0-9a-fA-F]{64}$'
+          description: 32-byte X25519 public key agreement key in hex
+        role:
+          type: integer
+          example: 0
+        issued_at:
+          type: integer
+        expires_at:
+          type: integer
+
+    GroupKeyDto:
+      type: object
+      required:
+        - epoch
+        - key_hex
+        - valid_until
+      properties:
+        epoch:
+          type: integer
+          example: 1
+        key_hex:
+          type: string
+          pattern: '^[0-9a-fA-F]{64}$'
+          description: 32-byte XChaCha20-Poly1305 key
+        valid_until:
+          type: integer
+
+    PushRequest:
+      type: object
+      required:
+        - group_id
+        - envelopes
+      properties:
+        group_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{32}$'
+        envelopes:
+          type: array
+          description: Array of base64-encoded canonical CBOR message envelopes
+          items:
+            type: string
+        certificates:
+          type: array
+          description: Optional array of base64-encoded author certificates
+          items:
+            type: string
+
+    PushResponse:
+      type: object
+      required:
+        - accepted_ids
+        - rejected
+        - receipts
+      properties:
+        accepted_ids:
+          type: array
+          items:
+            type: string
+            pattern: '^[0-9a-fA-F]{64}$'
+            description: Message ID (SHA-256 hex)
+        rejected:
+          type: array
+          items:
+            $ref: '#/components/schemas/RejectedItem'
+        receipts:
+          type: array
+          description: Server receipts confirming accepted sequence numbers
+          items:
+            $ref: '#/components/schemas/ReceiptDto'
+
+    RejectedItem:
+      type: object
+      required:
+        - message_id
+        - reason
+      properties:
+        message_id:
+          type: string
+        reason:
+          type: string
+          enum:
+            - INVALID_SIGNATURE
+            - CERTIFICATE_EXPIRED
+            - CERTIFICATE_REVOKED
+            - FUTURE_TIMESTAMP
+            - EXPIRED_TTL
+            - SIZE_EXCEEDED
+            - MALFORMED_CBOR
+
+    ReceiptDto:
+      type: object
+      required:
+        - raw_cbor_base64
+        - author
+        - ranges
+        - issued_at
+      properties:
+        raw_cbor_base64:
+          type: string
+        author:
+          type: string
+          pattern: '^[0-9a-fA-F]{64}$'
+        ranges:
+          type: array
+          items:
+            type: array
+            items:
+              type: integer
+            minItems: 2
+            maxItems: 2
+            example: [1, 15]
+        issued_at:
+          type: integer
+
+    PullResponse:
+      type: object
+      required:
+        - envelopes
+        - has_more
+        - server_vector
+      properties:
+        envelopes:
+          type: array
+          items:
+            type: string
+            description: Base64-encoded canonical CBOR envelope
+        has_more:
+          type: boolean
+        server_vector:
+          type: string
+          description: Base64-encoded canonical CBOR server version vector
+
+    ReceiptsResponse:
+      type: object
+      required:
+        - receipts
+      properties:
+        receipts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReceiptDto'
+
+    RevocationsResponse:
+      type: object
+      required:
+        - revocations
+      properties:
+        revocations:
+          type: array
+          items:
+            type: object
+            required:
+              - raw_cbor_base64
+              - member_pubkey
+              - revoked_at
+              - reason
+            properties:
+              raw_cbor_base64:
+                type: string
+              member_pubkey:
+                type: string
+              revoked_at:
+                type: integer
+              reason:
+                type: string
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          example: 'INVALID_SIGNATURE'
+        message:
+          type: string
+          example: 'Envelope signature verification failed'

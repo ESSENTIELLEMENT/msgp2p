@@ -1,0 +1,38 @@
+name: Nightly Churn Soak
+
+# Nightly tier for scale and stress testing (IT-SCALE-02):
+# randomized churn across >= 50 seeds. Failing seeds are printed by the test
+# ("REPRODUCIBLE FAILURE ON SEED=<n>") and must be added as regression scenarios.
+# L5 emulator tests (IT-EMU-01/02) are not yet implemented.
+
+on:
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+    inputs:
+      seeds:
+        description: 'Number of churn seeds'
+        default: '50'
+
+permissions:
+  contents: read
+
+jobs:
+  churn-soak:
+    name: Multi-Seed Churn Soak (IT-SCALE-02)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install libsqlite3-dev
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Run soak
+        working-directory: packages/msgp2p_sim
+        env:
+          MSGP2P_SOAK_SEEDS: ${{ github.event.inputs.seeds || '50' }}
+        run: |
+          dart pub get
+          dart test test/scale_and_churn_sim_test.dart --timeout 20m

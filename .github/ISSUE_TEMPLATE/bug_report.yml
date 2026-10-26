@@ -1,0 +1,83 @@
+name: Bug Report
+description: File a reproducible bug report to help improve msgp2p.
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please verify that your issue is reproducible on the latest release and search [existing issues](https://github.com/ESSENTIELLEMENT/msgp2p/issues) before submitting.
+
+  - type: dropdown
+    id: package
+    attributes:
+      label: Affected Subsystem / Package
+      description: Select which component of msgp2p is affected.
+      options:
+        - msgp2p_core (Pure Dart protocol engine)
+        - msgp2p_sim (Discrete-event simulator)
+        - msgp2p_flutter (Flutter plugin & native radios)
+        - server/php (Reference gateway server)
+        - examples/bbs_chat_app (Reference mobile app)
+        - protocol (Specifications & test vectors)
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment & Versions
+      description: Detail operating system, device models, Flutter/Dart versions, and radio chipsets.
+      placeholder: e.g. Android 14 (Pixel 8), iOS 17.5 (iPhone 14), Flutter 3.22.0, Dart 3.4.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Provide clear, step-by-step instructions or a minimal code snippet to reproduce the issue.
+      placeholder: |
+        1. Initialize `MsgP2PNode` on Device A and Device B with configuration...
+        2. Publish a message from Device A...
+        3. Sever the BLE link mid-DATA frame...
+        4. Observe failure in session recovery...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+      placeholder: The session should cleanly resume or backoff without throwing unhandled exceptions.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually occurred?
+      placeholder: Throws StateError or link times out after 10 seconds.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs / Stack Traces
+      description: Attach relevant terminal output, trace JSONL events (`ChurnTraceAnalyzer`), or adb logcat traces.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Checklist
+      options:
+        - label: I have verified that this is not a duplicate of an existing open or closed issue.
+          required: true
+        - label: I understand that security vulnerabilities must be reported privately via the Security tab or email, not in this public issue.
+          required: true

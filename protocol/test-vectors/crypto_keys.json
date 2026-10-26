@@ -1,0 +1,35 @@
+{
+    "description": "Deterministic cryptographic keys for msgp2p test vectors",
+    "group_id_hex": "a0b1c2d3e4f50123456789abcdef0123",
+    "group_beacon_key_hex": "771726326f8f952122f126098b68b616ac3630f9bd11dce587d6e62899da1327",
+    "group_key_epoch_1_hex": "6a6857b42afacd39bae57823e733fc9165583be6c3d46dfa4af174bdca658656",
+    "server": {
+        "seed_hex": "b0f7ab3ba4d1f2cdbd54861ab828f8930b3bffb538a51ea068dff247533bdd1a",
+        "public_key_hex": "cfbb7b389c637893cb03da870625f9763a7143ec93513e3661ee3a5e47335f97",
+        "secret_key_hex": "b0f7ab3ba4d1f2cdbd54861ab828f8930b3bffb538a51ea068dff247533bdd1acfbb7b389c637893cb03da870625f9763a7143ec93513e3661ee3a5e47335f97"
+    },
+    "alice": {
+        "seed_hex": "6c6645b012fb247612a9b8d48841d700be0dcda62a2c5780ea72fa7a03aa0b1c",
+        "public_key_hex": "e532688318f4fd3b63d9726c2b3f81a621d79d0cb444372261ef8f9c9a39c3f0",
+        "secret_key_hex": "6c6645b012fb247612a9b8d48841d700be0dcda62a2c5780ea72fa7a03aa0b1ce532688318f4fd3b63d9726c2b3f81a621d79d0cb444372261ef8f9c9a39c3f0",
+        "noise_seed_hex": "0e8b4bfa078c89a9c6c131469f52dbe348da6dfe88328d2eec3504aaa8dd6422",
+        "noise_public_key_hex": "33da15b221906070a5a3e60b225d3e79c979aac6127ca9692829952758d53472",
+        "noise_secret_key_hex": "1ef67443ba371bb448737d252c92c7afd602222086cecd0420763e13f6605b80"
+    },
+    "bob": {
+        "seed_hex": "1f0c33be0b3a1771922c0ccc8b4cad2c3a2e3ae96742193f96131167dd752aec",
+        "public_key_hex": "a0ddb2fe40197d56d3ff6688915368d8277bea811f2294caac1f22dfea08e9f0",
+        "secret_key_hex": "1f0c33be0b3a1771922c0ccc8b4cad2c3a2e3ae96742193f96131167dd752aeca0ddb2fe40197d56d3ff6688915368d8277bea811f2294caac1f22dfea08e9f0",
+        "noise_seed_hex": "bb3ac0aa0b42d0382ae98368523d3f4c5376062543f5dde0d8cda06844e54351",
+        "noise_public_key_hex": "5b688c9741b9d511d5b03b8fa7db05d1db2d45a18088c9e8c51b437973c2937f",
+        "noise_secret_key_hex": "63599c0a86ff0573fd2f8c830eb8b065146cca124e511019f6222f4eda85cef6"
+    },
+    "charlie": {
+        "seed_hex": "94f1bdc05560ba0351b273c3a9b69553f157556d485a95b949d03c33b37f5b0c",
+        "public_key_hex": "b9182e44047ce694638df7b3f351dd171b23d7d4ce07ddfbab9502fba5f6da6c",
+        "secret_key_hex": "94f1bdc05560ba0351b273c3a9b69553f157556d485a95b949d03c33b37f5b0cb9182e44047ce694638df7b3f351dd171b23d7d4ce07ddfbab9502fba5f6da6c",
+        "noise_seed_hex": "f80664ebf26491ddcfbedde98193063f4b31d37707fa15fba6f1690ffd8ec287",
+        "noise_public_key_hex": "16a7e308184ccf36b0b73aaa5ffc70337546ea314aaf30d2f1b80f288c52ff42",
+        "noise_secret_key_hex": "82d3ffbeda62f8f0ed14ea4285298eddd1770ee5a111e70d440cd3df242e3dcc"
+    }
+}

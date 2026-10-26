@@ -1,0 +1,35 @@
+{
+    "description": "Server-signed batch receipts confirming delivered message sequence ranges",
+    "receipt_alice_1_to_5": {
+        "author_hex": "e532688318f4fd3b63d9726c2b3f81a621d79d0cb444372261ef8f9c9a39c3f0",
+        "ranges": [
+            [
+                1,
+                5
+            ]
+        ],
+        "issued_at": 1773822005000,
+        "receipt_core_cbor_hex": "a561760166617574686f725820e532688318f4fd3b63d9726c2b3f81a621d79d0cb444372261ef8f9c9a39c3f06672616e676573818201056867726f75705f696450a0b1c2d3e4f50123456789abcdef0123696973737565645f61741b0000019d0007cf08",
+        "server_sig_hex": "b3162d2ab2091a362d1d49783887abb6263d00038cf3c3c67a724770071805223cef73baf56d05eeaf1052effad1b1da421450e75c5551b6a7488816b0e36006",
+        "full_receipt_cbor_hex": "a661760166617574686f725820e532688318f4fd3b63d9726c2b3f81a621d79d0cb444372261ef8f9c9a39c3f06672616e676573818201056867726f75705f696450a0b1c2d3e4f50123456789abcdef0123696973737565645f61741b0000019d0007cf086a7365727665725f7369675840b3162d2ab2091a362d1d49783887abb6263d00038cf3c3c67a724770071805223cef73baf56d05eeaf1052effad1b1da421450e75c5551b6a7488816b0e36006",
+        "full_receipt_cbor_base64": "pmF2AWZhdXRob3JYIOUyaIMY9P07Y9lybCs\/gaYh150MtEQ3ImHvj5yaOcPwZnJhbmdlc4GCAQVoZ3JvdXBfaWRQoLHC0+T1ASNFZ4mrze8BI2lpc3N1ZWRfYXQbAAABnQAHzwhqc2VydmVyX3NpZ1hAsxYtKrIJGjYtHUl4OIertiY9AAOM88PGenJHcAcYBSI873O69W0F7q8QUu\/60bHaQhRQ51xVUbanSIgWsONgBg=="
+    },
+    "receipt_bob_multi_range": {
+        "author_hex": "a0ddb2fe40197d56d3ff6688915368d8277bea811f2294caac1f22dfea08e9f0",
+        "ranges": [
+            [
+                1,
+                4
+            ],
+            [
+                7,
+                10
+            ]
+        ],
+        "issued_at": 1773822006000,
+        "receipt_core_cbor_hex": "a561760166617574686f725820a0ddb2fe40197d56d3ff6688915368d8277bea811f2294caac1f22dfea08e9f06672616e6765738282010482070a6867726f75705f696450a0b1c2d3e4f50123456789abcdef0123696973737565645f61741b0000019d0007d2f0",
+        "server_sig_hex": "969ed4f2c65145a5c6a7e8612b9c69ecbecf71f2a2d378ab4ddfe6d4de27a81e10382230aeff10f5cb820cd3160b1530e7384ce6c238b330d8e43854e4584c06",
+        "full_receipt_cbor_hex": "a661760166617574686f725820a0ddb2fe40197d56d3ff6688915368d8277bea811f2294caac1f22dfea08e9f06672616e6765738282010482070a6867726f75705f696450a0b1c2d3e4f50123456789abcdef0123696973737565645f61741b0000019d0007d2f06a7365727665725f7369675840969ed4f2c65145a5c6a7e8612b9c69ecbecf71f2a2d378ab4ddfe6d4de27a81e10382230aeff10f5cb820cd3160b1530e7384ce6c238b330d8e43854e4584c06",
+        "full_receipt_cbor_base64": "pmF2AWZhdXRob3JYIKDdsv5AGX1W0\/9miJFTaNgne+qBHyKUyqwfIt\/qCOnwZnJhbmdlc4KCAQSCBwpoZ3JvdXBfaWRQoLHC0+T1ASNFZ4mrze8BI2lpc3N1ZWRfYXQbAAABnQAH0vBqc2VydmVyX3NpZ1hAlp7U8sZRRaXGp+hhK5xp7L7PcfKi03irTd\/m1N4nqB4QOCIwrv8Q9cuCDNMWCxUw5zhM5sI4szDY5DhU5FhMBg=="
+    }
+}

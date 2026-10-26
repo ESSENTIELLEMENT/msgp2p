@@ -1,0 +1,30 @@
+name: msgp2p_core
+description: Pure Dart core engine for the msgp2p delay-tolerant opportunistic mesh sync protocol.
+version: 1.0.0
+homepage: https://msgp2p.squares.net
+repository: https://github.com/ESSENTIELLEMENT/msgp2p/tree/main/packages/msgp2p_core
+issue_tracker: https://github.com/ESSENTIELLEMENT/msgp2p/issues
+topics:
+  - dtn
+  - mesh
+  - bluetooth
+  - offline-first
+  - cryptography
+publish_to: none
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  cbor: ^6.3.0
+  convert: ^3.1.1
+  cryptography: ^2.7.0
+  crypto: ^3.0.3
+  meta: ^1.12.0
+  sqlite3: ^2.4.0
+  yaml: ^3.1.2
+
+dev_dependencies:
+  coverage: ^1.7.0
+  test: ^1.25.0
+  lints: ^4.0.0

@@ -1,0 +1,71 @@
+name: "Partition and Merge (2 Valleys -> Ridge)"
+duration_seconds: 800
+seed: 42
+group_id: "0102030405060708090a0b0c0d0e0f10"
+
+nodes:
+  - id: "valley1_a"
+    profile: "ble_1m"
+  - id: "valley1_b"
+    profile: "ble_1m"
+  - id: "valley2_c"
+    profile: "ble_1m"
+  - id: "valley2_d"
+    profile: "ble_1m"
+
+contacts:
+  # Intra-valley contacts
+  - from: "valley1_a"
+    to: "valley1_b"
+    start_s: 20
+    duration_s: 80
+    profile: "ble_1m"
+
+  - from: "valley2_c"
+    to: "valley2_d"
+    start_s: 30
+    duration_s: 80
+    profile: "ble_1m"
+
+  # Bridge contact at ridge
+  - from: "valley1_b"
+    to: "valley2_c"
+    start_s: 200
+    duration_s: 90
+    profile: "ble_1m"
+
+  # Re-spread within valley 1 and valley 2
+  - from: "valley1_a"
+    to: "valley1_b"
+    start_s: 350
+    duration_s: 80
+    profile: "ble_1m"
+
+  - from: "valley2_c"
+    to: "valley2_d"
+    start_s: 360
+    duration_s: 80
+    profile: "ble_1m"
+
+workload:
+  - time_s: 10
+    author: "valley1_a"
+    type: "bbs_post"
+    priority: 2
+    body:
+      text: "Valley 1 survey complete"
+
+  - time_s: 15
+    author: "valley2_c"
+    type: "bbs_post"
+    priority: 2
+    body:
+      text: "Valley 2 water sampled"
+
+assertions:
+  - message_from: "valley1_a"
+    delivered_to: ["valley1_b", "valley2_c", "valley2_d"]
+    min_delivery_ratio: 1.0
+  - message_from: "valley2_c"
+    delivered_to: ["valley1_a", "valley1_b", "valley2_d"]
+    min_delivery_ratio: 1.0

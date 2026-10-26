@@ -1,0 +1,60 @@
+{
+    "description": "Version vectors and expected delta WANT request outputs",
+    "author_alice_hex": "e532688318f4fd3b63d9726c2b3f81a621d79d0cb444372261ef8f9c9a39c3f0",
+    "author_bob_hex": "a0ddb2fe40197d56d3ff6688915368d8277bea811f2294caac1f22dfea08e9f0",
+    "peer_a_vector": {
+        "e532688318f4fd3b63d9726c2b3f81a621d79d0cb444372261ef8f9c9a39c3f0": {
+            "contiguous": 5,
+            "gaps": [
+                8,
+                9
+            ]
+        },
+        "a0ddb2fe40197d56d3ff6688915368d8277bea811f2294caac1f22dfea08e9f0": {
+            "contiguous": 10,
+            "gaps": []
+        }
+    },
+    "peer_b_vector": {
+        "e532688318f4fd3b63d9726c2b3f81a621d79d0cb444372261ef8f9c9a39c3f0": {
+            "contiguous": 10,
+            "gaps": []
+        },
+        "a0ddb2fe40197d56d3ff6688915368d8277bea811f2294caac1f22dfea08e9f0": {
+            "contiguous": 6,
+            "gaps": [
+                8
+            ]
+        }
+    },
+    "expected_want_peer_a_requests_from_b": [
+        {
+            "author_hex": "e532688318f4fd3b63d9726c2b3f81a621d79d0cb444372261ef8f9c9a39c3f0",
+            "ranges": [
+                [
+                    6,
+                    7
+                ],
+                [
+                    10,
+                    10
+                ]
+            ]
+        }
+    ],
+    "expected_want_peer_b_requests_from_a": [
+        {
+            "author_hex": "a0ddb2fe40197d56d3ff6688915368d8277bea811f2294caac1f22dfea08e9f0",
+            "ranges": [
+                [
+                    7,
+                    7
+                ],
+                [
+                    9,
+                    10
+                ]
+            ]
+        }
+    ]
+}

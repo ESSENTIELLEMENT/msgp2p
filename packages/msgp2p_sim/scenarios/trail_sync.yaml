@@ -1,0 +1,42 @@
+name: "Trail Passing Relay (A -> B -> C)"
+duration_seconds: 600
+seed: 12345
+group_id: "0102030405060708090a0b0c0d0e0f10"
+
+nodes:
+  - id: "alice"
+    profile: "ble_1m"
+  - id: "bob"
+    profile: "ble_1m"
+  - id: "charlie"
+    profile: "ble_1m"
+
+contacts:
+  # Alice meets Bob on the trail (t=30s for 60s)
+  - from: "alice"
+    to: "bob"
+    start_s: 30
+    duration_s: 60
+    profile: "ble_1m"
+
+  # Bob meets Charlie further down the trail (t=150s for 60s)
+  - from: "bob"
+    to: "charlie"
+    start_s: 150
+    duration_s: 60
+    profile: "ble_1m"
+
+workload:
+  - time_s: 10
+    author: "alice"
+    type: "sos_alert"
+    priority: 0
+    body:
+      title: "Injured hiker at marker 12"
+      lat: 35.3606
+      lng: 138.7274
+
+assertions:
+  - message_from: "alice"
+    delivered_to: ["bob", "charlie"]
+    min_delivery_ratio: 1.0

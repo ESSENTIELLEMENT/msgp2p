@@ -1,0 +1,24 @@
+name: bbs_chat_app
+description: Reference consumer application demonstrating msgp2p off-grid group BBS, SOS alerts, and peer diagnostic radar.
+publish_to: none
+version: 1.0.0+3
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  msgp2p_flutter:
+    path: ../../packages/msgp2p_flutter
+  msgp2p_core:
+    path: ../../packages/msgp2p_core
+  cryptography: ^2.7.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

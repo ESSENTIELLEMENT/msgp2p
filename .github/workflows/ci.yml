@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+permissions:
+  contents: read
+
+jobs:
+  protocol-and-server:
+    name: Protocol Vectors & PHP Server Conformance
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: msgp2p_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: sodium, json, pdo, pdo_mysql
+      - name: Configure MySQL User for Tests
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot -e "CREATE USER IF NOT EXISTS 'msgp2p_user'@'%' IDENTIFIED BY 'your_password_here'; GRANT ALL PRIVILEGES ON *.* TO 'msgp2p_user'@'%'; FLUSH PRIVILEGES;"
+      - name: Install Composer Dependencies
+        working-directory: server/php
+        run: composer install --no-interaction --prefer-dist
+      - name: Verify Cross-Platform Test Vectors
+        run: php tools/verify_test_vectors.php
+      - name: Run PHP Server Conformance & HTTP Router Tests
+        run: |
+          php -l server/php/public/index.php
+          php server/php/tests/run_tests.php
+          php server/php/tests/RouterHttpTest.php
+
+  dart-core-and-sim:
+    name: Dart Core, SQLite, Simulator & E2E Tests
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: msgp2p_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install System SQLite & PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: sodium, json, pdo, pdo_mysql
+      - name: Install libsqlite3-dev
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+      - name: Configure MySQL User for E2E Tests
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot -e "CREATE USER IF NOT EXISTS 'msgp2p_user'@'%' IDENTIFIED BY 'your_password_here'; GRANT ALL PRIVILEGES ON *.* TO 'msgp2p_user'@'%'; FLUSH PRIVILEGES;"
+      - name: Install Server Composer Dependencies
+        working-directory: server/php
+        run: composer install --no-interaction --prefer-dist
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Verify Code Formatting
+        run: dart format --output=none --set-exit-if-changed packages examples
+      - name: Analyze & Test Core Package
+        working-directory: packages/msgp2p_core
+        run: |
+          dart pub get
+          dart analyze --fatal-infos
+          dart test
+      - name: Analyze & Test Simulator Package (incl. PHP Server E2E)
+        working-directory: packages/msgp2p_sim
+        run: |
+          dart pub get
+          dart analyze --fatal-infos
+          dart test
+
+  flutter-plugin-and-app:
+    name: Flutter Plugin & Reference BBS App Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+      - name: Analyze & Test msgp2p_flutter Plugin
+        working-directory: packages/msgp2p_flutter
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+      - name: Analyze & Test examples/bbs_chat_app Reference App
+        working-directory: examples/bbs_chat_app
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test

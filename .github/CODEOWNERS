@@ -1,0 +1,21 @@
+# Global default owner for all files
+*                                       @ESSENTIELLEMENT
+
+# Protocol specifications & wire formats
+/protocol/                              @ESSENTIELLEMENT
+
+# Core protocol engine & simulator
+/packages/msgp2p_core/                  @ESSENTIELLEMENT
+/packages/msgp2p_sim/                   @ESSENTIELLEMENT
+
+# Flutter plugin & native platform radio adapters
+/packages/msgp2p_flutter/               @ESSENTIELLEMENT
+
+# Reference application
+/examples/bbs_chat_app/                 @ESSENTIELLEMENT
+
+# Reference gateway server
+/server/php/                            @ESSENTIELLEMENT
+
+# CI/CD workflows and security configurations
+/.github/                               @ESSENTIELLEMENT

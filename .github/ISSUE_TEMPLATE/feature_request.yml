@@ -1,0 +1,55 @@
+name: Feature Request / Protocol RFC
+description: Propose an enhancement, transport adapter, or protocol update.
+title: "[Proposal]: "
+labels: ["enhancement", "proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        We welcome proposals to improve `msgp2p`! Please describe your use case, the architectural impact, and any alternatives you considered.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement & Motivation
+      description: What problem are you trying to solve, or what scenario is currently unsupported?
+      placeholder: e.g. We need to support LoRa broadcast synchronization in areas where BLE range is insufficient.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution / Design
+      description: Describe your proposed approach, API changes, or architectural modifications.
+      placeholder: Introduce a 0-RTT unidirectional push mode for high-priority envelopes...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: wire_impact
+    attributes:
+      label: Wire Format & Protocol Impact
+      description: Does this proposal require changes to the wire protocol or cryptographic structures?
+      options:
+        - None (SDK internal logic or tooling only)
+        - Minor (Additive / backward-compatible CBOR extension)
+        - Major (Requires update to protocol/wire-format.md and test vectors)
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What alternative approaches did you evaluate, and why is the proposed solution preferable?
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Agreement
+      options:
+        - label: I agree to follow the project's Code of Conduct and Contribution Guidelines.
+          required: true

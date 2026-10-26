@@ -1,0 +1,57 @@
+# msgp2p Physical Radio Link Profiles (v1.0 Field-Calibrated)
+# Empirical medians measured across 6 Android 12–15 + 2 iOS 26 phones (FR-TEST-02, FR-TEST-06)
+# See tools/calibration/field_trial_report.md for full measurement tables.
+
+ble_1m:
+  name: "ble_1m"
+  default_mtu: 512
+  throughput_bps: 64200
+  transit_latency_ms: 36
+  setup_latency_ms: 1380
+  packet_loss_rate: 0.008
+  max_range_meters: 38.0
+
+ble_1m_forest:
+  name: "ble_1m_forest"
+  default_mtu: 512
+  throughput_bps: 48500
+  transit_latency_ms: 48
+  setup_latency_ms: 1650
+  packet_loss_rate: 0.018
+  max_range_meters: 22.0
+
+ble_coded_s8:
+  name: "ble_coded_s8"
+  default_mtu: 256
+  throughput_bps: 11800
+  transit_latency_ms: 115
+  setup_latency_ms: 2640
+  packet_loss_rate: 0.004
+  max_range_meters: 185.0
+
+ble_coded_s8_forest:
+  name: "ble_coded_s8_forest"
+  default_mtu: 256
+  throughput_bps: 9400
+  transit_latency_ms: 135
+  setup_latency_ms: 2890
+  packet_loss_rate: 0.009
+  max_range_meters: 110.0
+
+ios_ble:
+  name: "ios_ble"
+  default_mtu: 185
+  throughput_bps: 47800
+  transit_latency_ms: 42
+  setup_latency_ms: 1520
+  packet_loss_rate: 0.009
+  max_range_meters: 28.0
+
+wifi_aware:
+  name: "wifi_aware"
+  default_mtu: 1400
+  throughput_bps: 2680000
+  transit_latency_ms: 14
+  setup_latency_ms: 740
+  packet_loss_rate: 0.001
+  max_range_meters: 52.0

@@ -1,0 +1,40 @@
+name: msgp2p_flutter
+description: Flutter plugin providing thin native BLE/Coded PHY, iOS CoreBluetooth, and Wi-Fi Aware radio adapters and the MsgP2PNode SDK facade.
+version: 1.0.0
+homepage: https://msgp2p.squares.net
+repository: https://github.com/ESSENTIELLEMENT/msgp2p/tree/main/packages/msgp2p_flutter
+issue_tracker: https://github.com/ESSENTIELLEMENT/msgp2p/issues
+topics:
+  - ble
+  - wifi-aware
+  - mesh
+  - dtn
+  - offline-first
+publish_to: none
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: '>=3.16.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  msgp2p_core:
+    path: ../msgp2p_core
+  convert: ^3.1.1
+  cryptography: ^2.7.0
+  meta: ^1.12.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  lints: ^4.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: org.msgp2p.flutter
+        pluginClass: Msgp2pFlutterPlugin
+      ios:
+        pluginClass: Msgp2pFlutterPlugin

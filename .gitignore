@@ -1,0 +1,23 @@
+# Dart / Flutter
+.dart_tool/
+.packages
+build/
+coverage/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+
+# SQLite temporary files
+*.db
+*.db-shm
+*.db-wal
+
+# PHP / Composer
+server/php/vendor/
+composer.phar
+
+# OS / Editor
+.DS_Store
+.idea/
+.vscode/
+*.swp

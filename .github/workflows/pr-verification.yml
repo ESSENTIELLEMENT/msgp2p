@@ -1,0 +1,36 @@
+name: PR Verification
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  verify-pr:
+    name: Verify PR Template & Human Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR Description
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python3 -c '
+          import os, re, sys
+
+          body = os.environ.get("PR_BODY", "")
+          if not body.strip():
+              print("::error::Pull request description is empty. Please complete the PR template.")
+              sys.exit(1)
+
+          if not re.search(r"\[x\]\s+\*\*Human Verification\*\*", body, re.IGNORECASE):
+              print("::error::Human verification checkbox is not checked. Please confirm you have verified and tested this PR by checking the \"Human Verification\" box in the PR template.")
+              sys.exit(1)
+
+          issue_ref = re.search(r"(fixes|resolves|closes)\s+#\d+", body, re.IGNORECASE) or re.search(r"github\.com/[^/]+/[^/]+/(issues|discussions)/\d+", body, re.IGNORECASE)
+          if not issue_ref:
+              print("::warning::No linked issue found. Per CONTRIBUTING.md, non-trivial PRs should reference an accepted GitHub Issue or Discussion (e.g. \"Fixes #12\").")
+
+          print("PR template verification passed successfully.")
+          '

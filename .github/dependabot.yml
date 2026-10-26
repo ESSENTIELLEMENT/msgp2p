@@ -1,0 +1,60 @@
+version: 2
+updates:
+  # Maintain GitHub Actions workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "ci"
+
+  # Maintain Dart dependencies in packages/msgp2p_core
+  - package-ecosystem: "pub"
+    directory: "/packages/msgp2p_core"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "core"
+    open-pull-requests-limit: 5
+
+  # Maintain Dart dependencies in packages/msgp2p_sim
+  - package-ecosystem: "pub"
+    directory: "/packages/msgp2p_sim"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "simulator"
+    open-pull-requests-limit: 5
+
+  # Maintain Flutter dependencies in packages/msgp2p_flutter
+  - package-ecosystem: "pub"
+    directory: "/packages/msgp2p_flutter"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "flutter"
+    open-pull-requests-limit: 5
+
+  # Maintain Flutter dependencies in examples/bbs_chat_app
+  - package-ecosystem: "pub"
+    directory: "/examples/bbs_chat_app"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "example"
+    open-pull-requests-limit: 5
+
+  # Maintain PHP Composer dependencies in server/php
+  - package-ecosystem: "composer"
+    directory: "/server/php"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "server"
+    open-pull-requests-limit: 5

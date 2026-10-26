@@ -1,0 +1,161 @@
+name: "Phase 5 Field Trial: 8-Phone Mountain SAR Mesh (6 Android + 2 iOS)"
+duration_seconds: 600
+seed: 20261025
+group_id: "000102030405060708090a0b0c0d0e0f"
+
+nodes:
+  - id: scout_north
+    platform: android
+    supports_coded_phy: true
+    supports_wifi_aware: true
+  - id: scout_south
+    platform: android
+    supports_coded_phy: true
+    supports_wifi_aware: true
+  - id: hiker_1
+    platform: android
+    supports_coded_phy: true
+    supports_wifi_aware: true
+  - id: hiker_2
+    platform: android
+    supports_coded_phy: true
+    supports_wifi_aware: true
+  - id: medic_ios_1
+    platform: ios
+    supports_coded_phy: false
+    supports_wifi_aware: true
+  - id: basecamp_ios_2
+    platform: ios
+    supports_coded_phy: false
+    supports_wifi_aware: true
+  - id: mule_relay
+    platform: android
+    supports_coded_phy: true
+    supports_wifi_aware: true
+  - id: ridge_gw
+    platform: android
+    supports_coded_phy: true
+    supports_wifi_aware: true
+
+workload:
+  - time_s: 10
+    author: scout_north
+    type: sos
+    priority: 0
+    body:
+      title: "SOS: Rockfall at North Gully"
+      lat: 35.3621
+      lng: 138.7314
+  - time_s: 15
+    author: scout_south
+    type: bbs_post
+    priority: 1
+    attachment_size_bytes: 12288
+    attachment_mime: "image/jpeg"
+    body:
+      title: "South bridge washout photo"
+      text: "Crossing impassable; reroute via east ridge"
+  - time_s: 20
+    author: medic_ios_1
+    type: bbs_post
+    priority: 1
+    body:
+      title: "Medical team status"
+      text: "Trauma kit ready at mid-station"
+
+contacts:
+  # Forest Coded PHY long-range hop from isolated North Scout to Hiker 1
+  - from: scout_north
+    to: hiker_1
+    start_s: 30
+    duration_s: 40
+    profile: ble_coded_s8_forest
+
+  # South Scout meets Hiker 2 on forest switchback (upgrades to Wi-Fi Aware for 12 KB photo)
+  - from: scout_south
+    to: hiker_2
+    start_s: 40
+    duration_s: 40
+    profile: ble_1m_forest
+
+  # Hiker 1 and Hiker 2 converge with Medic (iOS) at mid-station
+  - from: hiker_1
+    to: medic_ios_1
+    start_s: 100
+    duration_s: 40
+    profile: ios_ble
+
+  - from: hiker_2
+    to: medic_ios_1
+    start_s: 150
+    duration_s: 45
+    profile: ios_ble
+
+  # Mule relay syncs with Medic (iOS) and carries everything to Basecamp (iOS) and Ridge Gateway
+  - from: medic_ios_1
+    to: mule_relay
+    start_s: 210
+    duration_s: 45
+    profile: ios_ble
+
+  - from: mule_relay
+    to: basecamp_ios_2
+    start_s: 270
+    duration_s: 45
+    profile: ios_ble
+
+  - from: mule_relay
+    to: ridge_gw
+    start_s: 330
+    duration_s: 45
+    profile: ble_1m
+
+  # Propagate full mesh state back to edge scouts and hikers
+  - from: mule_relay
+    to: hiker_1
+    start_s: 390
+    duration_s: 40
+    profile: ble_1m_forest
+
+  - from: mule_relay
+    to: hiker_2
+    start_s: 440
+    duration_s: 40
+    profile: ble_1m_forest
+
+  - from: hiker_1
+    to: scout_north
+    start_s: 490
+    duration_s: 40
+    profile: ble_coded_s8_forest
+
+  - from: hiker_2
+    to: scout_south
+    start_s: 540
+    duration_s: 40
+    profile: ble_1m_forest
+
+gateways:
+  - node: ridge_gw
+    start_s: 380
+    duration_s: 60
+
+assertions:
+  - delivered_to:
+      - scout_north
+      - scout_south
+      - hiker_1
+      - hiker_2
+      - medic_ios_1
+      - basecamp_ios_2
+      - mule_relay
+      - ridge_gw
+    attachments_delivered_to:
+      - scout_north
+      - scout_south
+      - hiker_1
+      - hiker_2
+      - medic_ios_1
+      - basecamp_ios_2
+      - mule_relay
+      - ridge_gw

@@ -1,0 +1,78 @@
+# Scenario: Mixed Android & iOS Capabilities with Wi-Fi Aware Bulk Upgrade (v0.2)
+name: "Mixed Android/iOS Relay & Wi-Fi Aware Attachment Upgrade"
+duration_seconds: 600
+seed: 202602
+group_id: "a0b1c2d3e4f50123456789abcdef0123"
+
+nodes:
+  - id: android_scout
+    platform: android
+    profile: ble_coded_s8
+    supports_coded_phy: true
+    supports_wifi_aware: true
+  - id: android_mule
+    platform: android
+    profile: ble_1m
+    supports_coded_phy: true
+    supports_wifi_aware: true
+  - id: ios_basecamp
+    platform: ios
+    profile: ios_ble
+    supports_coded_phy: false
+    supports_wifi_aware: true
+
+workload:
+  - time_s: 10
+    author: android_scout
+    type: sos
+    priority: 0
+    body:
+      alert: "Rockslide on North Trail - photo attached"
+    attachment_size_bytes: 8192
+    attachment_mime: "image/jpeg"
+  - time_s: 20
+    author: ios_basecamp
+    type: bbs_post
+    priority: 2
+    body:
+      title: "Basecamp Weather"
+      text: "Winds 15kt from NW, shelter open"
+
+contacts:
+  # Direct long-range Coded PHY between android_scout and ios_basecamp is impossible (iOS lacks Coded PHY)
+  - from: android_scout
+    to: ios_basecamp
+    start_s: 30
+    duration_s: 30
+    profile: ble_coded_s8
+
+  # Android scout meets Android mule at medium range; BLE syncs envelope and upgrades to Wi-Fi Aware for attachment
+  - from: android_scout
+    to: android_mule
+    start_s: 90
+    duration_s: 60
+    profile: ble_1m
+
+  # Android mule reaches iOS basecamp; syncs over ios_ble (185B MTU) and upgrades to Wi-Fi Aware (1400B MTU) for attachment
+  - from: android_mule
+    to: ios_basecamp
+    start_s: 240
+    duration_s: 60
+    profile: ios_ble
+
+  # Android mule returns to Android scout to deliver ios_basecamp's weather post
+  - from: android_mule
+    to: android_scout
+    start_s: 400
+    duration_s: 60
+    profile: ble_coded_s8
+
+gateways:
+  - node: ios_basecamp
+    start_s: 500
+    duration_s: 60
+
+assertions:
+  - delivered_to: [android_scout, android_mule, ios_basecamp]
+    attachments_delivered_to: [android_scout, android_mule, ios_basecamp]
+    min_delivery_ratio: 1.0
