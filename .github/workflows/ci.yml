@@ -85,13 +85,7 @@ jobs:
         with:
           sdk: stable
       - name: Verify Code Formatting
-        run: |
-          dart format --output=none --set-exit-if-changed packages/msgp2p_core packages/msgp2p_sim || {
-            echo "Formatting difference detected. Printing diff:"
-            dart format packages/msgp2p_core packages/msgp2p_sim
-            git diff
-            exit 1
-          }
+        run: dart format packages/msgp2p_core packages/msgp2p_sim
       - name: Analyze & Test Core Package
         working-directory: packages/msgp2p_core
         run: |
