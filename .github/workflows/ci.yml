@@ -18,7 +18,7 @@ jobs:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: msgp2p_test
+          MYSQL_DATABASE: msgp2p
         ports:
           - 3306:3306
         options: >-
@@ -33,9 +33,10 @@ jobs:
         with:
           php-version: '8.3'
           extensions: sodium, json, pdo, pdo_mysql
-      - name: Configure MySQL User for Tests
+      - name: Configure MySQL User & Database Schema
         run: |
-          mysql -h 127.0.0.1 -uroot -proot -e "CREATE USER IF NOT EXISTS 'msgp2p_user'@'%' IDENTIFIED BY 'your_password_here'; GRANT ALL PRIVILEGES ON *.* TO 'msgp2p_user'@'%'; FLUSH PRIVILEGES;"
+          mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS msgp2p; CREATE USER IF NOT EXISTS 'msgp2p_user'@'%' IDENTIFIED BY 'your_password_here'; GRANT ALL PRIVILEGES ON *.* TO 'msgp2p_user'@'%'; FLUSH PRIVILEGES;"
+          php server/php/database/migrate.php
       - name: Install Composer Dependencies
         working-directory: server/php
         run: composer install --no-interaction --prefer-dist
@@ -55,7 +56,7 @@ jobs:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: msgp2p_test
+          MYSQL_DATABASE: msgp2p
         ports:
           - 3306:3306
         options: >-
@@ -72,9 +73,10 @@ jobs:
           extensions: sodium, json, pdo, pdo_mysql
       - name: Install libsqlite3-dev
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
-      - name: Configure MySQL User for E2E Tests
+      - name: Configure MySQL User & Database Schema for E2E Tests
         run: |
-          mysql -h 127.0.0.1 -uroot -proot -e "CREATE USER IF NOT EXISTS 'msgp2p_user'@'%' IDENTIFIED BY 'your_password_here'; GRANT ALL PRIVILEGES ON *.* TO 'msgp2p_user'@'%'; FLUSH PRIVILEGES;"
+          mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS msgp2p; CREATE USER IF NOT EXISTS 'msgp2p_user'@'%' IDENTIFIED BY 'your_password_here'; GRANT ALL PRIVILEGES ON *.* TO 'msgp2p_user'@'%'; FLUSH PRIVILEGES;"
+          php server/php/database/migrate.php
       - name: Install Server Composer Dependencies
         working-directory: server/php
         run: composer install --no-interaction --prefer-dist
@@ -82,7 +84,7 @@ jobs:
         with:
           sdk: stable
       - name: Verify Code Formatting
-        run: dart format --output=none --set-exit-if-changed packages examples
+        run: dart format --output=none --set-exit-if-changed packages/msgp2p_core packages/msgp2p_sim
       - name: Analyze & Test Core Package
         working-directory: packages/msgp2p_core
         run: |
@@ -104,6 +106,8 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+      - name: Verify Flutter Code Formatting
+        run: dart format --output=none --set-exit-if-changed packages/msgp2p_flutter examples/bbs_chat_app
       - name: Analyze & Test msgp2p_flutter Plugin
         working-directory: packages/msgp2p_flutter
         run: |

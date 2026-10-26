@@ -28,7 +28,7 @@ To preserve code quality, cryptographic security, and maintainer time, `msgp2p` 
 
 1. **No Unsolicited Autonomous Bot PRs**:
    * We do not accept pull requests opened autonomously by bot accounts, scrapers, or automated AI agents without prior human discussion and approval.
-   * Automated pull requests (including unsolicited dependency bumps outside of project-configured Dependabot, generic typo sweeps, automated reformatting, or promotional links) will be immediately closed, marked as spam, and the submitting account will be blocked and reported to GitHub.
+   * Automated pull requests (including unsolicited dependency bumps, generic typo sweeps, automated reformatting, or promotional links) will be immediately closed, marked as spam, and the submitting account will be blocked and reported to GitHub.
 2. **No Low-Effort / Micro-PRs**:
    * Pull requests that make trivial single-character typo edits, add cosmetic README badges, adjust whitespace, or generate synthetic translations without addressing an open, accepted issue will be rejected.
 3. **Responsible Use of AI by Human Contributors**:
