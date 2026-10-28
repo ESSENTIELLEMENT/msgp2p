@@ -166,6 +166,21 @@ document lifetime classes (e.g. position 15 min, posts 24 h, SOS 72 h) that apps
 unnecessary) is deferred: it would have to be inside the signed core, and the version vectors would need to
 treat superseded sequences as held. Revisit it only if measurements show positions crowding out posts.
 
+### P4. Write-only members (devices that report but must not read)
+Some members are devices, not people: a phone on a hunting dog's collar, a drone. They report their own
+position and should relay the group's traffic (a dog runs between people), but they never need to read it, and
+a lost device should not carry the group's messages in readable form.
+
+- The server issues **two keys per group**: the group key (people) and a **tracker key** (devices), each with
+  its own `key_epoch` values (e.g. a reserved range or a key-class field in the grant, not in the envelope).
+- People get both keys and read everything. A device gets only the tracker key: it encrypts its own envelopes
+  with it and **relays all other envelopes without decrypting them**, which the verification pipeline already
+  allows (wire-format §4.4 needs no group key).
+- The certificate gets `role: 3` (tracker), so apps can show such authors differently and the server can refuse
+  content types a tracker must not author (e.g. posts).
+- No wire change: `key_epoch` already selects the key; only key distribution (`MembershipSource` /
+  `/auth/login`) and the `role` enumeration grow. Rotating either key on membership change works as today.
+
 ## 7. Migration plan (small PRs, each with tests)
 
 | PR | Content | Compatibility |
@@ -180,6 +195,7 @@ treat superseded sequences as held. Revisit it only if measurements show positio
 | 8 | `server/php-lib` + reference server on top of it; `sodium_compat` fallback | endpoints unchanged |
 | 9 | P1 server-authored envelopes (vectors, Dart, PHP, simulator scenario) | `role` enum grows |
 | 10 | P2 group notice (vectors, Dart, PHP, simulator scenario) | new message kind |
+| 11 | P4 write-only members: tracker key class, `role: 3`, blind relaying test (a tracker relays what it cannot read) | `role` enum grows |
 
 ## 8. Tests
 
@@ -195,5 +211,7 @@ treat superseded sequences as held. Revisit it only if measurements show positio
    pulling `/sync/revocations`?
 2. Package count: is one `msgp2p_adapters` package with conditional imports preferable to several small ones?
 3. P1: one server author per group, or one per server with the group in the certificate only?
-4. Should the 4 KB envelope limit stay a protocol constant, with long texts truncated by the app, or should a
+4. P4: how is a key's class (group / tracker) carried in the grant: a reserved `key_epoch` range, or a field
+   next to each key?
+5. Should the 4 KB envelope limit stay a protocol constant, with long texts truncated by the app, or should a
    multi-part message kind be specified?
