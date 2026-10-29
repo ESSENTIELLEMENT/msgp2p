@@ -17,6 +17,7 @@ class Msgp2pFlutterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Even
     private lateinit var eventChannel: EventChannel
     private lateinit var wifiAwareMethodChannel: MethodChannel
     private lateinit var wifiAwareEventChannel: EventChannel
+    private lateinit var keyVaultChannel: MethodChannel
     private var applicationContext: Context? = null
     private var eventSink: EventChannel.EventSink? = null
     private var wifiAwareController: Msgp2pWifiAwareController? = null
@@ -80,6 +81,9 @@ class Msgp2pFlutterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Even
             }
         }
         wifiAwareEventChannel = EventChannel(binding.binaryMessenger, "org.msgp2p/wifi_aware_events")
+
+        keyVaultChannel = MethodChannel(binding.binaryMessenger, "org.msgp2p/key_vault")
+        keyVaultChannel.setMethodCallHandler(KeyVaultChannel(ctx))
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -122,6 +126,7 @@ class Msgp2pFlutterPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Even
         methodChannel.setMethodCallHandler(null)
         eventChannel.setStreamHandler(null)
         wifiAwareMethodChannel.setMethodCallHandler(null)
+        keyVaultChannel.setMethodCallHandler(null)
         wifiAwareController?.teardownAll()
         wifiAwareController = null
         applicationContext = null

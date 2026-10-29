@@ -125,3 +125,11 @@ jobs:
           flutter pub get
           flutter analyze
           flutter test
+
+  ios-keychain-vault:
+    name: iOS Keychain Vault (Swift build & XCTest)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build KeychainVault.swift and run its XCTests (SwiftPM, no Flutter needed)
+        run: bash tools/ci/swift_keyvault_test.sh

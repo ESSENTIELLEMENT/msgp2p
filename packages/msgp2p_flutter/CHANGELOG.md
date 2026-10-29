@@ -6,7 +6,11 @@
   store is checked against it before the node authors, and the node continues its sequence numbers from the
   store after a restart (before, they started again at 1). `signingSeed` / `noiseSeed` are deprecated and will
   be removed in the next minor version. Publishes are serialized, so sequence numbers are stored in order.
-- The keystore-backed vault for Android and iOS follows in step 2b.
+- `PlatformKeyVault` (proposal 0001, step 2b; Discussion #10): the identity in the Android Keystore (AES-256-GCM,
+  sealed file in `noBackupFilesDir`) or the iOS Keychain (`AfterFirstUnlockThisDeviceOnly`, with a marker file
+  so an item left over from an earlier install is replaced). A vault file restored to another device throws
+  `KeyVaultUnavailableError`; concurrent first calls create one identity across isolates. Backup rules in the
+  README. Channel `org.msgp2p/key_vault`; the iOS pod now links `Security`.
 
 ## 1.0.0
 
