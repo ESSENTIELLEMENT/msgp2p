@@ -9,8 +9,11 @@ import 'package:msgp2p_core/msgp2p_core.dart';
 /// A [KeyVault] in a file with mode 0600, for headless nodes (Linux CLI, gateways, on-board computers).
 /// Proposal 0001, step 2 (Discussion #10).
 ///
-/// - The file holds `{"v": 1, "signing": "<hex>", "noise": "<hex>"}`. It is created with mode 0600 before the
-///   seeds are written, then moved into place with a rename, so a crash never leaves a half-written vault.
+/// - The file holds `{"v": 1, "signing": "<hex>", "noise": "<hex>"}`. It is created exclusively with mode 0600
+///   in a private temporary directory before the seeds are written, then moved into place with a rename, so a
+///   crash never leaves a half-written vault.
+/// - The directory must belong to the node's user: one that group or others can write to, or a symlink in
+///   place of the vault or its lock file, is refused with a [FileSystemException].
 /// - One identity even with concurrent first calls: a lock per path inside the process, and an exclusive
 ///   lock on `<path>.lock` across processes (POSIX record locks do not exclude within one process).
 /// - Unreadable or malformed contents throw [KeyVaultCorruptedError]; the file is left as it is.
@@ -84,19 +87,48 @@ class FileKeyVault implements KeyVault {
   }
 
   Future<void> _write(IdentitySeeds seeds) async {
-    final tmp = File('$path.tmp.$pid');
-    await tmp.parent.create(recursive: true);
-    await tmp.writeAsBytes(const [], flush: true);
-    await _restrict(tmp.path); // before the seeds are in it
-    await tmp.writeAsString(
-      jsonEncode({
-        'v': seeds.version,
-        'signing': hex.encode(seeds.signing),
-        'noise': hex.encode(seeds.noise)
-      }),
-      flush: true,
-    );
-    await tmp.rename(path);
+    // The file is written inside a new private directory (mkdtemp: unpredictable name, mode 0700), so no
+    // other user can pre-create, replace or open it; being next to the vault, the rename stays on one file
+    // system and is atomic.
+    final staging = await File(path).parent.createTemp('.vault.tmp.');
+    try {
+      final tmp = File('${staging.path}/seeds');
+      await tmp.create(
+          exclusive: true); // O_EXCL: never an existing file or a symlink
+      await _restrict(tmp.path); // before the seeds are in it
+      final raf = await tmp.open(mode: FileMode.writeOnly);
+      try {
+        await raf.writeString(jsonEncode({
+          'v': seeds.version,
+          'signing': hex.encode(seeds.signing),
+          'noise': hex.encode(seeds.noise)
+        }));
+        await raf.flush();
+      } finally {
+        await raf.close();
+      }
+      await tmp.rename(path);
+    } finally {
+      await staging.delete(recursive: true);
+    }
+  }
+
+  /// Refuses a directory other users can write to, and a symlink in place of the vault or its lock: another
+  /// user could otherwise swap in their own seeds or redirect the files (Dart cannot read a file's owner, so
+  /// the directory must also belong to the node's user, as the README says).
+  Future<void> _checkPlace() async {
+    final dir = File(path).parent;
+    await dir.create(recursive: true);
+    if (!Platform.isWindows && (await dir.stat()).mode & 0x12 != 0) {
+      throw FileSystemException(
+          'the vault directory is writable by other users (group or others)',
+          dir.path);
+    }
+    for (final p in [path, '$path.lock']) {
+      if (await FileSystemEntity.isLink(p)) {
+        throw FileSystemException('refusing a symbolic link', p);
+      }
+    }
   }
 
   /// chmod 600. Dart has no API for file modes, so the system's `chmod` does it.
@@ -114,14 +146,15 @@ class FileKeyVault implements KeyVault {
     final done = Completer<void>();
     _pathLocks[path] = done.future;
     return previous.then((_) async {
-      final lockFile = File('$path.lock');
-      await lockFile.parent.create(recursive: true);
-      final raf = await lockFile.open(mode: FileMode.append);
+      RandomAccessFile? raf;
       try {
+        await _checkPlace();
+        raf = await File('$path.lock').open(mode: FileMode.append);
         await raf.lock(FileLock.blockingExclusive);
+        await _checkPlace(); // again under the lock
         return await action();
       } finally {
-        await raf.close(); // closing releases the lock
+        await raf?.close(); // closing releases the lock
         done.complete();
         if (identical(_pathLocks[path], done.future)) _pathLocks.remove(path);
       }
