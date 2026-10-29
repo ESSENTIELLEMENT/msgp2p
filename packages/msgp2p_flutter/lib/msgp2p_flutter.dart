@@ -3,6 +3,7 @@ library msgp2p_flutter;
 
 export 'package:msgp2p_core/msgp2p_core.dart';
 
+export 'src/identity/platform_key_vault.dart';
 export 'src/node/msgp2p_node.dart';
 export 'src/platform/ble_radio_bridge.dart';
 export 'src/platform/wifi_aware_radio_bridge.dart';
