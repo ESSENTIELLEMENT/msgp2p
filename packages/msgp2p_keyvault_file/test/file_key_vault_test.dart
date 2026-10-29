@@ -35,6 +35,36 @@ void main() {
         isEmpty);
   }, testOn: '!windows');
 
+  test('a directory other users can write to is refused', () async {
+    final path = nextPath();
+    final vaultDir = File(path).parent..createSync(recursive: true);
+    expect(Process.runSync('chmod', ['1777', vaultDir.path]).exitCode, 0);
+    await expectLater(
+        FileKeyVault(path).loadOrCreate(), throwsA(isA<FileSystemException>()));
+    expect(vaultDir.listSync(), isEmpty, reason: 'nothing written');
+  }, testOn: '!windows');
+
+  test('a symlink in place of the vault is refused, not followed', () async {
+    final path = nextPath();
+    final planted = File('${dir.path}/planted.json')
+      ..writeAsStringSync(
+          '{"v": 1, "signing": "${'11' * 32}", "noise": "${'22' * 32}"}');
+    File(path).parent.createSync(recursive: true);
+    Link(path).createSync(planted.path);
+    await expectLater(
+        FileKeyVault(path).loadOrCreate(), throwsA(isA<FileSystemException>()));
+  }, testOn: '!windows');
+
+  test('a symlink in place of the lock file is refused', () async {
+    final path = nextPath();
+    final target = File('${dir.path}/elsewhere')..writeAsStringSync('');
+    File(path).parent.createSync(recursive: true);
+    Link('$path.lock').createSync(target.path);
+    await expectLater(
+        FileKeyVault(path).loadOrCreate(), throwsA(isA<FileSystemException>()));
+    expect(File(path).existsSync(), isFalse);
+  }, testOn: '!windows');
+
   test('two vault objects on one path create one identity', () async {
     final path = nextPath();
     final results = await Future.wait([
