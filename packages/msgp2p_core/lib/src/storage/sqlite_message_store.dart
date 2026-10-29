@@ -193,7 +193,71 @@ class SqliteMessageStore implements MessageStore {
         k TEXT PRIMARY KEY,
         v INTEGER NOT NULL
       );
+
+      -- The identity this store belongs to and the highest sequence it authored (Discussion #10).
+      -- One row. Not in local_state: its v column is INTEGER, and a key is 32 bytes.
+      CREATE TABLE IF NOT EXISTS local_identity (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        owner_pubkey BLOB NOT NULL,
+        author_seq INTEGER NOT NULL
+      );
     ''');
+  }
+
+  @override
+  Future<Uint8List?> getOwnerPubkey() async {
+    final rows =
+        _db.select('SELECT owner_pubkey FROM local_identity WHERE id = 1;');
+    if (rows.isEmpty) return null;
+    return Uint8List.fromList(rows.first['owner_pubkey'] as List<int>);
+  }
+
+  @override
+  Future<void> setOwner(Uint8List ownerPubkey) async {
+    // A different owner is a new author: its counter starts again.
+    _db.execute(
+      '''
+      INSERT INTO local_identity (id, owner_pubkey, author_seq) VALUES (1, ?, 0)
+      ON CONFLICT (id) DO UPDATE SET
+        author_seq = CASE WHEN owner_pubkey = excluded.owner_pubkey THEN author_seq ELSE 0 END,
+        owner_pubkey = excluded.owner_pubkey;
+      ''',
+      [ownerPubkey],
+    );
+  }
+
+  @override
+  Future<int> getAuthorSeq() async {
+    final rows =
+        _db.select('SELECT author_seq FROM local_identity WHERE id = 1;');
+    if (rows.isEmpty) return 0;
+    return (rows.first['author_seq'] as int?) ?? 0;
+  }
+
+  @override
+  Future<bool> saveOwnEnvelope(Envelope envelope, {int? customStoredAt}) async {
+    _db.execute('BEGIN IMMEDIATE TRANSACTION;');
+    try {
+      final rows = _db.select(
+          'SELECT 1 FROM local_identity WHERE id = 1 AND owner_pubkey = ?;',
+          [envelope.core.author]);
+      if (rows.isEmpty) {
+        throw StateError(
+            'saveOwnEnvelope: the envelope author is not the store owner');
+      }
+      final saved = _insertSingleEnvelope(envelope,
+          customStoredAt: customStoredAt, origin: 'LOCAL');
+      if (saved) {
+        _db.execute(
+            'UPDATE local_identity SET author_seq = MAX(author_seq, ?) WHERE id = 1;',
+            [envelope.core.seq]);
+      }
+      _db.execute('COMMIT;');
+      return saved;
+    } catch (e) {
+      _db.execute('ROLLBACK;');
+      rethrow;
+    }
   }
 
   int get _maxObservedTimeMs {
@@ -250,7 +314,8 @@ class SqliteMessageStore implements MessageStore {
     return _insertSingleEnvelope(envelope, customStoredAt: customStoredAt);
   }
 
-  bool _insertSingleEnvelope(Envelope envelope, {int? customStoredAt}) {
+  bool _insertSingleEnvelope(Envelope envelope,
+      {int? customStoredAt, String origin = 'PEER'}) {
     final msgId = envelope.messageId;
     final existing = _db.select(
       'SELECT 1 FROM envelopes WHERE id = ? OR (author = ? AND seq = ?) LIMIT 1;',
@@ -288,7 +353,7 @@ class SqliteMessageStore implements MessageStore {
       INSERT INTO envelopes (
         id, author, seq, created_at, expires_at, priority, key_epoch,
         raw, byte_size, stored_at, origin, server_confirmed
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PEER', ?);
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
       ''',
       [
         msgId,
@@ -301,6 +366,7 @@ class SqliteMessageStore implements MessageStore {
         raw,
         raw.length,
         storedAt,
+        origin,
         confirmed,
       ],
     );

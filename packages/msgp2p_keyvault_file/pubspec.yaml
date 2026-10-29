@@ -1,0 +1,23 @@
+name: msgp2p_keyvault_file
+description: File-based KeyVault (mode 0600) for headless msgp2p nodes such as Linux CLI runners and gateways.
+version: 0.1.0
+homepage: https://msgp2p.squares.net
+repository: https://github.com/ESSENTIELLEMENT/msgp2p/tree/main/packages/msgp2p_keyvault_file
+issue_tracker: https://github.com/ESSENTIELLEMENT/msgp2p/issues
+topics:
+  - dtn
+  - mesh
+  - cryptography
+publish_to: none
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  convert: ^3.1.1
+  msgp2p_core:
+    path: ../msgp2p_core
+
+dev_dependencies:
+  lints: ^4.0.0
+  test: ^1.25.0

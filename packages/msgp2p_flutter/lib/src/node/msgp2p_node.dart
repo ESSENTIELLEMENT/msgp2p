@@ -156,7 +156,12 @@ class MsgP2PNode {
   Uint8List? _groupBeaconKey;
   final Map<int, Uint8List> _groupKeysByEpoch = {};
   int _activeKeyEpoch = 1;
+
+  /// The last sequence this identity authored, from the store at start (`guardStoreIdentity`).
   int _localSeq = 0;
+
+  /// Publishes one at a time, so sequence numbers are stored in order without gaps.
+  Future<void> _publishing = Future.value();
 
   final Set<String> _handedToPeerMessageIds = {};
   final Map<String, DiscoveredPeerInfo> _peersByAddress = {};
@@ -189,6 +194,12 @@ class MsgP2PNode {
   }
 
   /// Initializes a [MsgP2PNode] instance (FR-SDK-04).
+  ///
+  /// The identity comes from [keyVault] (FR-ID-01; proposal 0001, step 2). Before the node may author, the
+  /// store is checked to belong to that identity, and the node continues its sequence numbers from the
+  /// store: an existing identity with an empty or foreign store throws [UnsynchronizedIdentityException].
+  /// Give a persistent vault a persistent store: with an in-memory store every restart would be refused.
+  /// Without a vault the node gets a new identity for this run only (or the deprecated seeds).
   static Future<MsgP2PNode> initialize({
     required MsgP2PConfig config,
     MessageStore? store,
@@ -197,22 +208,46 @@ class MsgP2PNode {
     GatewayClient? gatewayClient,
     Clock? clock,
     RandomSource? randomSource,
+    KeyVault? keyVault,
+    @Deprecated(
+        'Pass a KeyVault (proposal 0001, step 2); removed in the next minor version')
     Uint8List? signingSeed,
+    @Deprecated(
+        'Pass a KeyVault (proposal 0001, step 2); removed in the next minor version')
     Uint8List? noiseSeed,
     MembershipCert? initialCert,
     Map<int, Uint8List>? initialGroupKeys,
     Uint8List? initialBeaconKey,
   }) async {
     final rng = randomSource ?? SystemRandomSource();
-    final signKp =
-        await MsgP2PCrypto.newKeyPairFromSeed(signingSeed ?? rng.nextBytes(32));
+    final IdentitySeeds seeds;
+    final bool created;
+    if (keyVault != null) {
+      final loaded = await keyVault.loadOrCreate();
+      loaded.seeds.validate();
+      seeds = loaded.seeds;
+      created = loaded.created;
+    } else {
+      seeds = IdentitySeeds(
+        signing: signingSeed ?? rng.nextBytes(32),
+        noise: noiseSeed ?? rng.nextBytes(32),
+      );
+      // Deprecated seeds: the host's own storage cannot say whether they are new, so the store is adopted.
+      created = true;
+    }
+
+    final signKp = await MsgP2PCrypto.newKeyPairFromSeed(seeds.signing);
     final memberPk = await MsgP2PCrypto.getPublicKeyBytes(signKp);
 
-    final noiseKp =
-        await cg.X25519().newKeyPairFromSeed(noiseSeed ?? rng.nextBytes(32));
+    final noiseKp = await cg.X25519().newKeyPairFromSeed(seeds.noise);
     final noisePk = await NoiseHandshake.getPublicKeyBytes(noiseKp);
 
     final nodeStore = store ?? MemoryMessageStore();
+    final lastSeq = await guardStoreIdentity(
+      store: nodeStore,
+      ownerPubkey: memberPk,
+      created: created,
+    );
     final nodeTransport = transport ?? AndroidBleTransport();
     final nodeGateway = gatewayClient ??
         GatewayClient(baseUrl: config.serverEndpoint.toString());
@@ -230,6 +265,7 @@ class MsgP2PNode {
       noiseKeyPair: noiseKp,
       noisePubkey: noisePk,
     );
+    node._localSeq = lastSeq;
 
     if (initialCert != null) {
       node._membershipCert = initialCert;
@@ -322,6 +358,24 @@ class MsgP2PNode {
     Priority priority = Priority.normal,
     Duration? ttl,
     List<({Uint8List bytes, String mime})>? attachments,
+  }) {
+    final result = _publishing.then((_) => _publish(
+          type: type,
+          body: body,
+          priority: priority,
+          ttl: ttl,
+          attachments: attachments,
+        ));
+    _publishing = result.then((_) {}, onError: (Object _) {});
+    return result;
+  }
+
+  Future<Envelope> _publish({
+    required String type,
+    required Map<String, dynamic> body,
+    required Priority priority,
+    Duration? ttl,
+    List<({Uint8List bytes, String mime})>? attachments,
   }) async {
     final cert = _membershipCert;
     if (cert == null) {
@@ -332,7 +386,8 @@ class MsgP2PNode {
       throw StateError('No group key available for epoch $_activeKeyEpoch');
     }
 
-    _localSeq++;
+    // Used only once stored: saveOwnEnvelope raises the store's counter in the same transaction.
+    final seq = _localSeq + 1;
     final nowMs = clock.now().millisecondsSinceEpoch;
     List<AttachmentRef>? attachmentRefs;
     if (attachments != null && attachments.isNotEmpty) {
@@ -360,7 +415,7 @@ class MsgP2PNode {
       groupKey: groupKey,
       authorKeyPair: signingKeyPair,
       certRef: cert.certRef,
-      seq: _localSeq,
+      seq: seq,
       payload: payloadMap,
       priority: priority.code,
       ttl: ttl ?? config.defaultMessageTtl,
@@ -369,7 +424,10 @@ class MsgP2PNode {
       randomSource: randomSource,
     );
 
-    await store.saveEnvelope(env, customStoredAt: nowMs);
+    if (!await store.saveOwnEnvelope(env, customStoredAt: nowMs)) {
+      throw StateError('Sequence $seq is already stored for this identity');
+    }
+    _localSeq = seq;
     _decryptedPayloadCache[hex.encode(env.messageId)] =
         (type, Map<String, dynamic>.from(body));
     _trackEnvelope(env);

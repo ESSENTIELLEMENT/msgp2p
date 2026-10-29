@@ -116,6 +116,24 @@ abstract class MessageStore {
   /// Optional [customStoredAt] allows simulating storage timestamps in tests & simulator.
   Future<bool> saveEnvelope(Envelope envelope, {int? customStoredAt});
 
+  /// The identity this store belongs to (the author public key of its own envelopes), or null for a new
+  /// store. Checked by `guardStoreIdentity` before the node authors (Discussion #10).
+  Future<Uint8List?> getOwnerPubkey();
+
+  /// Makes [ownerPubkey] the store's owner. A different owner than before resets the author sequence
+  /// counter to 0 (a new identity is a new author).
+  Future<void> setOwner(Uint8List ownerPubkey);
+
+  /// The highest sequence number the owner has authored (0 for none). Never lowered by pruning or eviction:
+  /// a reused sequence would conflict with copies peers hold and look already confirmed to the server.
+  Future<int> getAuthorSeq();
+
+  /// Stores an envelope the owner just authored (origin `LOCAL`) and raises the author sequence counter to
+  /// its `seq`, in one transaction. Throws [StateError] if the store has no owner or the envelope's author
+  /// is not the owner. Returns false (and leaves the counter unchanged) if an envelope with the same id or
+  /// `(author, seq)` already exists.
+  Future<bool> saveOwnEnvelope(Envelope envelope, {int? customStoredAt});
+
   /// Stores multiple [envelopes] atomically in a batch (NFR-REL-01).
   /// Returns the count of newly stored envelopes (excluding duplicates).
   Future<int> saveBatch(List<Envelope> envelopes, {int? customStoredAt});

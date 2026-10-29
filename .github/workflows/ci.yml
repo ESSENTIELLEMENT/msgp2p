@@ -85,9 +85,15 @@ jobs:
         with:
           sdk: stable
       - name: Verify Code Formatting
-        run: dart format packages/msgp2p_core packages/msgp2p_sim
+        run: dart format packages/msgp2p_core packages/msgp2p_sim packages/msgp2p_keyvault_file
       - name: Analyze & Test Core Package
         working-directory: packages/msgp2p_core
+        run: |
+          dart pub get
+          dart analyze --fatal-infos
+          dart test
+      - name: Analyze & Test File KeyVault Package
+        working-directory: packages/msgp2p_keyvault_file
         run: |
           dart pub get
           dart analyze --fatal-infos
