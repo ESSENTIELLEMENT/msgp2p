@@ -52,6 +52,55 @@ public class Msgp2pFlutterPlugin: NSObject, FlutterPlugin {
         awareEventChannel.setStreamHandler(ChannelStreamHandler { sink in
             awareCtrl.eventSink = sink
         })
+
+        let vault = KeychainVault(keychain: SystemKeychain(), markerDirectory: KeychainVault.defaultMarkerDirectory())
+        let keyVaultChannel = FlutterMethodChannel(
+            name: "org.msgp2p/key_vault",
+            binaryMessenger: registrar.messenger()
+        )
+        keyVaultChannel.setMethodCallHandler { call, result in
+            Msgp2pFlutterPlugin.handleKeyVault(vault, call: call, result: result)
+        }
+    }
+
+    /// Runs the vault on its serial queue (Keychain calls can block) and replies on the main thread.
+    private static func handleKeyVault(_ vault: KeychainVault, call: FlutterMethodCall, result: @escaping FlutterResult) {
+        let args = call.arguments as? [String: Any]
+        guard let name = args?["name"] as? String, KeychainVault.isValidName(name) else {
+            result(FlutterError(code: "BAD_ARGS", message: "missing or bad vault name", details: nil))
+            return
+        }
+        let action: () throws -> Any?
+        switch call.method {
+        case "loadOrCreate":
+            guard let candidate = (args?["candidate"] as? FlutterStandardTypedData)?.data else {
+                result(FlutterError(code: "BAD_ARGS", message: "missing candidate", details: nil))
+                return
+            }
+            action = {
+                let loaded = try vault.loadOrCreate(name: name, candidate: candidate)
+                return ["seeds": FlutterStandardTypedData(bytes: loaded.seeds), "created": loaded.created] as [String: Any]
+            }
+        case "erase":
+            action = {
+                try vault.erase(name: name)
+                return nil
+            }
+        default:
+            result(FlutterMethodNotImplemented)
+            return
+        }
+        KeychainVault.queue.async {
+            let reply: Any?
+            do {
+                reply = try action()
+            } catch let error as KeyVaultError {
+                reply = FlutterError(code: error.code, message: error.message, details: nil)
+            } catch {
+                reply = FlutterError(code: "KEYCHAIN", message: String(describing: type(of: error)), details: nil)
+            }
+            DispatchQueue.main.async { result(reply) }
+        }
     }
 }
 
