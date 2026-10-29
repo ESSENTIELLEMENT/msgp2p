@@ -61,6 +61,10 @@ class MemoryMessageStore implements MessageStore {
   // Highest observed timestamp for backward clock-jump protection (IT-DS-05d)
   int _maxObservedTimeMs = 0;
 
+  // The identity this store belongs to and the highest sequence it authored (Discussion #10).
+  Uint8List? _ownerPubkey;
+  int _authorSeq = 0;
+
   MemoryMessageStore({
     this.maxStorageBytes = 100 * 1024 * 1024, // 100 MB default per FR-SYNC-05
     this.maxEvictionRefetches = 2, // E_max = 2 default per IT-DS-01
@@ -76,6 +80,34 @@ class MemoryMessageStore implements MessageStore {
   /// Returns true if the last recepción of [messageId] was a re-fetch after prior eviction.
   bool wasRefetchedAfterEviction(Uint8List messageId) {
     return getEvictionRefetchCount(messageId) > 0;
+  }
+
+  @override
+  Future<Uint8List?> getOwnerPubkey() async =>
+      _ownerPubkey == null ? null : Uint8List.fromList(_ownerPubkey!);
+
+  @override
+  Future<void> setOwner(Uint8List ownerPubkey) async {
+    final previous = _ownerPubkey;
+    if (previous == null || !_bytesEqual(previous, ownerPubkey)) _authorSeq = 0;
+    _ownerPubkey = Uint8List.fromList(ownerPubkey);
+  }
+
+  @override
+  Future<int> getAuthorSeq() async => _authorSeq;
+
+  @override
+  Future<bool> saveOwnEnvelope(Envelope envelope, {int? customStoredAt}) async {
+    final owner = _ownerPubkey;
+    if (owner == null || !_bytesEqual(owner, envelope.core.author)) {
+      throw StateError(
+          'saveOwnEnvelope: the envelope author is not the store owner');
+    }
+    final bySeq = _envelopesByAuthorSeq[hex.encode(envelope.core.author)];
+    if (bySeq != null && bySeq.containsKey(envelope.core.seq)) return false;
+    final saved = await saveEnvelope(envelope, customStoredAt: customStoredAt);
+    if (saved && envelope.core.seq > _authorSeq) _authorSeq = envelope.core.seq;
+    return saved;
   }
 
   @override
