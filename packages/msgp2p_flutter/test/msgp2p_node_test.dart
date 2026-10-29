@@ -63,8 +63,8 @@ void main() {
           groupId: groupId,
         ),
         transport: transport,
-        signingSeed: signSeed,
-        noiseSeed: noiseSeed,
+        keyVault: MemoryKeyVault.fromSeeds(
+            IdentitySeeds(signing: signSeed, noise: noiseSeed)),
         initialCert: cert,
         initialGroupKeys: {1: groupKey},
         initialBeaconKey: Uint8List.fromList(List.filled(32, 0x55)),

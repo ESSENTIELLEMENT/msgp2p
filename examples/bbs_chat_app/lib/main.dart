@@ -86,8 +86,8 @@ class BbsDemoEnvironment {
         ),
         transport: transport,
         wifiAwareTransport: awareTransport,
-        signingSeed: signSeed,
-        noiseSeed: noiseSeed,
+        keyVault: MemoryKeyVault.fromSeeds(
+            IdentitySeeds(signing: signSeed, noise: noiseSeed)),
         initialCert: cert,
         initialGroupKeys: {1: groupKey},
         initialBeaconKey: beaconKey,
