@@ -9,12 +9,16 @@ class TransportCapabilities {
   final int defaultMtu;
   final int maxConnections;
   final bool supportsBulk;
+  final Duration recommendedFrameTimeout;
+  final bool isBroadcastMedium;
 
   const TransportCapabilities({
     required this.transportName,
     required this.defaultMtu,
     this.maxConnections = 4,
     this.supportsBulk = false,
+    this.recommendedFrameTimeout = const Duration(seconds: 10),
+    this.isBroadcastMedium = false,
   });
 }
 

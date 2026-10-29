@@ -102,6 +102,10 @@ class SessionStateMachine {
   /// Timeout when awaiting the next protocol frame (`IT-FLAP-02` `T_reclaim`, default 10 s).
   final Duration frameTimeout;
 
+  /// Whether to close the underlying [PeerLink] when this session finishes or is closed.
+  /// Set to `false` for sequential multi-group sessions over a persistent link.
+  final bool closeLinkOnTermination;
+
   /// Fault-injection hook (`IT-FLAP-05`): if true, drops the link immediately after
   /// completing the Noise-XX handshake.
   final bool dropAfterHandshake;
@@ -158,6 +162,7 @@ class SessionStateMachine {
     this.upgradeThresholdBytes = 16384,
     this.rejectRevokedPeerHandshake = false,
     this.frameTimeout = const Duration(seconds: 10),
+    this.closeLinkOnTermination = true,
     this.dropAfterHandshake = false,
     this.cutAfterSendingFrameType,
     this.onFrameSent,
@@ -719,7 +724,7 @@ class SessionStateMachine {
     }
     _frameWaiters.clear();
     _frameQueue.clear();
-    if (!link.isClosed) {
+    if (!link.isClosed && closeLinkOnTermination) {
       await link.close();
     }
   }

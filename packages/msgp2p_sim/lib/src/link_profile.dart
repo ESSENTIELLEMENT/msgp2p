@@ -86,6 +86,28 @@ class LinkProfile {
     maxRangeMeters: 52.0,
   );
 
+  /// Factory preset for LoRa Meshtastic standard medium speed (SF7 / 125 kHz BW).
+  static const LinkProfile loraSf7 = LinkProfile(
+    name: 'lora_sf7_125k',
+    defaultMtu: 230,
+    throughputBps: 5468,
+    transitLatencyMs: 180,
+    setupLatencyMs: 0,
+    packetLossRate: 0.02,
+    maxRangeMeters: 5000.0,
+  );
+
+  /// Factory preset for LoRa extreme long range / SAR (SF11 / 125 kHz BW).
+  static const LinkProfile loraSf11 = LinkProfile(
+    name: 'lora_sf11_125k',
+    defaultMtu: 230,
+    throughputBps: 440,
+    transitLatencyMs: 850,
+    setupLatencyMs: 0,
+    packetLossRate: 0.05,
+    maxRangeMeters: 15000.0,
+  );
+
   /// Looks up a profile by name from defaults or custom profiles.
   static LinkProfile byName(String name, [Map<String, LinkProfile>? custom]) {
     if (custom != null && custom.containsKey(name)) {
@@ -105,6 +127,13 @@ class LinkProfile {
       case 'wifi_aware':
       case 'wifiaware':
         return wifiAware;
+      case 'lora_sf7_125k':
+      case 'lora_sf7':
+      case 'lora':
+        return loraSf7;
+      case 'lora_sf11_125k':
+      case 'lora_sf11':
+        return loraSf11;
       case 'ble_1m':
       case 'ble':
       default:

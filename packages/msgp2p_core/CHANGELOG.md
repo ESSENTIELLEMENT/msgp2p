@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
 
 - **KeyVault port** (proposal 0001, step 2; Discussion #10): `KeyVault`, `IdentitySeeds`, `KeyVaultLoad`,
   `MemoryKeyVault` (also `fromSeeds`), `KeyVaultCorruptedError`, `KeyVaultUnavailableError`.
@@ -10,7 +10,15 @@
   every start. `MessageStore` gains `getOwnerPubkey`, `setOwner`, `getAuthorSeq` and `saveOwnEnvelope`, which
   stores an own envelope (origin `LOCAL`) and raises the counter in one transaction; pruning never lowers it.
   `SqliteMessageStore` keeps them in a new one-row table `local_identity`, created on open.
-- **Breaking for custom `MessageStore` implementations:** the four methods above must be implemented.
+- **LoRa Transport & 0-RTT Broadcast Mode**:
+  - Added `recommendedFrameTimeout` (up to 45 s for LoRa) and `isBroadcastMedium` to `TransportCapabilities`.
+  - Added `BroadcastFrame`, `BroadcastChunkPacket` (magic `0xBD`, CRC-16), `BroadcastChunkSlicer`, and `BroadcastChunkReassembler` (`broadcast_framing.dart`).
+  - Added `BroadcastTransport` interface and `BroadcastEngine` (`broadcast_engine.dart`) for 0-RTT flood publishing, reassembly, cryptographic verification, and direct SQLite ingestion over unidirectional or low-bandwidth radio links without interactive handshake overhead.
+- **Multiple Groups per Device (Multi-Tenancy)**:
+  - Added `GroupMembership` domain model and `GroupStorePool` with `inMemory()` and `sqlite()` factory constructors to cleanly isolate SQLite databases (`messages_group_<hex>.db`), quotas, and message sequence spaces per group.
+  - Added `MultiGroupBeaconManager` with round-robin advertising rotation across active groups and constant-time token scanning matcher.
+  - Added `closeLinkOnTermination` flag to `SessionStateMachine` allowing persistent connection reuse.
+  - Added `MultiGroupSyncCoordinator` to sequentially execute sync sessions across all shared groups over a single physical link without radio reconnect overhead.
 
 ## 1.0.0
 

@@ -78,6 +78,26 @@ class SimMedium {
     }
   }
 
+  /// Broadcasts an unacknowledged radio packet to all nodes currently in contact.
+  void broadcastPacket({
+    required String sourceAddress,
+    required Uint8List packet,
+    int? rssi,
+    double? snr,
+  }) {
+    for (final entry in _transports.entries) {
+      if (entry.key != sourceAddress &&
+          canCommunicate(sourceAddress, entry.key)) {
+        entry.value.onIncomingBroadcast(BroadcastPacket(
+          payload: packet,
+          rssi: rssi ?? -85,
+          snr: snr ?? 7.5,
+          sourceAddress: sourceAddress,
+        ));
+      }
+    }
+  }
+
   Future<SimPeerLink> establishConnection({
     required SimTransport initiator,
     required String targetAddress,
@@ -362,6 +382,9 @@ class SimTransport implements P2PTransport {
       _incomingController.add(link);
     }
   }
+
+  /// Hook invoked by [SimMedium] when an unacknowledged broadcast packet arrives.
+  void onIncomingBroadcast(BroadcastPacket packet) {}
 
   Future<void> dispose() async {
     await stop();

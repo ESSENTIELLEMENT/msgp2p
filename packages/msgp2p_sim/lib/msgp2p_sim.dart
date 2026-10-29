@@ -7,4 +7,5 @@ export 'src/metrics.dart';
 export 'src/scenario.dart';
 export 'src/sim_server.dart';
 export 'src/sim_transport.dart';
+export 'src/sim_lora_transport.dart';
 export 'src/simulator.dart';

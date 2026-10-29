@@ -32,3 +32,12 @@ export 'src/sync/session_state_machine.dart';
 export 'src/harness/mesh_harness.dart';
 export 'src/harness/scenario.dart';
 export 'src/gateway/gateway_client.dart';
+
+export 'src/framing/broadcast_framing.dart';
+export 'src/transport/broadcast_transport.dart';
+export 'src/sync/broadcast_engine.dart';
+
+export 'src/group/group_membership.dart';
+export 'src/group/group_store_pool.dart';
+export 'src/group/multi_group_beacon_manager.dart';
+export 'src/group/multi_group_sync_coordinator.dart';

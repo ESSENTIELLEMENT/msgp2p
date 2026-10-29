@@ -55,3 +55,21 @@ wifi_aware:
   setup_latency_ms: 740
   packet_loss_rate: 0.001
   max_range_meters: 52.0
+
+lora_sf7_125k:
+  name: "lora_sf7_125k"
+  default_mtu: 230
+  throughput_bps: 5468
+  transit_latency_ms: 180
+  setup_latency_ms: 0
+  packet_loss_rate: 0.02
+  max_range_meters: 5000.0
+
+lora_sf11_125k:
+  name: "lora_sf11_125k"
+  default_mtu: 230
+  throughput_bps: 440
+  transit_latency_ms: 850
+  setup_latency_ms: 0
+  packet_loss_rate: 0.05
+  max_range_meters: 15000.0

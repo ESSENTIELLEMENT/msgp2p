@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0
+
+- Added `lora_sf7_125k` and `lora_sf11_125k` link profiles to `link_profiles.yaml` and `LinkProfile.named()`.
+- Added `SimLoRaTransport` (`sim_lora_transport.dart`) for simulating half-duplex, low-bitrate, long-range LoRa broadcast communications.
+- Added 5-node Mountain SAR 0-RTT broadcast simulation (`test/sim_lora_broadcast_test.dart`) verifying SOS flood propagation from deep ravine via mountain ridge relay to base camp without interactive round-trips.
+
 ## 1.0.0
 
 - Updated `link_profiles.yaml` and `LinkProfile` with v1.0 field-calibrated measurements (`ble_1m`, `ble_1m_forest`, `ble_coded_s8`, `ble_coded_s8_forest`, `ios_ble`, `wifi_aware`).

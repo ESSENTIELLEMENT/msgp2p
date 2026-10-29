@@ -1,6 +1,6 @@
 name: msgp2p_sim
 description: Deterministic discrete-event simulator and CLI runner for msgp2p DTN scenarios.
-version: 1.0.0
+version: 1.1.0
 homepage: https://msgp2p.squares.net
 repository: https://github.com/ESSENTIELLEMENT/msgp2p/tree/main/packages/msgp2p_sim
 issue_tracker: https://github.com/ESSENTIELLEMENT/msgp2p/issues
