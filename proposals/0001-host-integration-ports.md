@@ -1,6 +1,7 @@
 # Proposal 0001: Host Integration Ports (modular SDK and server library)
 
-> Status: **Draft for review** (2026-10-28). Requirement IDs refer to [requirements.md](../requirements.md).
+> Status: **Draft for review** (2026-10-28); the open questions were decided on 2026-10-29 (§9).
+> Requirement IDs refer to [requirements.md](../requirements.md).
 > Scope: `packages/msgp2p_core`, `packages/msgp2p_flutter`, `server/php`, `protocol/`.
 > Nothing here changes the wire format of existing envelopes, certificates, receipts or revocations.
 
@@ -59,9 +60,21 @@ abstract interface class MembershipSource {
 
 class MembershipGrant {
   final MembershipCert cert;
-  final Map<int, Uint8List> groupKeys; // epoch -> key
+  final List<GrantedKey> keys; // a tracker gets only KeyRole.tracker keys (P4, §9.4)
   final Uint8List beaconKey;
+
+  /// The group's active revocations, as the server-signed notices themselves, so the node can gossip
+  /// them on into the mesh and peers can verify them (§9.1).
+  final List<RevocationNotice> revocations;
   final DateTime refreshAfter;
+}
+
+enum KeyRole { member, tracker }
+
+class GrantedKey {
+  final int epoch; // unique across the server, never reused (§9.4)
+  final KeyRole role;
+  final Uint8List key;
 }
 
 /// The gateway operations (FR-SRV-02..05), independent of how HTTP is done.
@@ -111,7 +124,9 @@ msgp2p_gateway_http      today's GatewayClient as GatewayApi + HttpExecutor (dar
 msgp2p_reference_auth    MembershipSource for the reference server's /auth/register + /auth/login
 ```
 
-Each adapter package depends on `msgp2p_core` only. The core keeps an in-memory store and no HTTP code, so it
+Separate packages, not one package with conditional imports (§9.2): conditional imports cannot remove
+dependencies from a pubspec, so a combined package would pull Flutter and a second SQLite library into
+pure-Dart users. Each adapter package depends on `msgp2p_core` only. The core keeps an in-memory store and no HTTP code, so it
 stays free of I/O choices. The schema of both SQLite stores is the one in architecture.md §6, with a shared
 migration test.
 
@@ -124,7 +139,8 @@ server/php-lib/ (Composer package, PHP 8.2+, declare(strict_types=1), no SQL, no
   interfaces:
     EnvelopeRepository   insertIfNew(id, author, seq, raw), heldRanges(author), after(vector, limit)
     MemberDirectory      memberOf(group, pubkey) -> role|null, revoked(group) -> list
-    ServerKeys           certSigningKey(), serverAuthorKey(), groupKey(group, epoch)
+    ServerKeys           certSigningKey(), authorMasterSecret() (P1 derives per group),
+                         groupKeys(group) -> [epoch, role, key]
     Crypto               Ed25519 sign/verify, XChaCha20-Poly1305: SodiumCrypto (ext-sodium, or the
                          paragonie/sodium_compat polyfill on hosts without the extension)
 server/php/ (reference server) = Router + Auth + PDO repositories + the library
@@ -141,8 +157,16 @@ the pure-PHP path is measured in CI and documented.
 Messages that reach the server over plain HTTP (from members who are online) should also reach offline
 members through the mesh. The server gets an **author identity of its own**:
 
-- a separate Ed25519 key (`serverAuthorKey`, never the certificate-signing key), with a membership certificate
-  issued by the pinned server key, `role: 2` (server), one per group;
+- **one author per group** (§9.3), its Ed25519 seed derived with HKDF-SHA256 from a server master secret:
+  `seed = HKDF(ikm = master_secret, salt = none, info = "msgp2p/server-author/v1/" || group_id, L = 32)`.
+  The server stores no key pair per group; sequence numbers stay continuous per group, so version vectors stay
+  compact; and authors of unrelated groups cannot be linked;
+- the author gets a membership certificate issued by the pinned server key, `role: 2` (server). The
+  certificate-signing key is never the master secret and never derived from it;
+- the `v1` in `info` versions the derivation: a new version (after a suspected leak) gives every group a new
+  author, whose certificates the server reissues;
+- the master secret is the server's most valuable secret (it stands for every group's server author): kept
+  outside the database and the web root, backed up offline, never in a repository;
 - its own monotonic `seq`, encrypted under the group key like any member's envelope;
 - gateways pull these envelopes like any other, and peers relay them unchanged.
 
@@ -171,10 +195,12 @@ Some members are devices, not people: a phone on a hunting dog's collar, a drone
 position and should relay the group's traffic (a dog runs between people), but they never need to read it, and
 a lost device should not carry the group's messages in readable form.
 
-- The server issues **two keys per group**: the group key (people) and a **tracker key** (devices), each with
-  its own `key_epoch` values (e.g. a reserved range or a key-class field in the grant, not in the envelope).
-- People get both keys and read everything. A device gets only the tracker key: it encrypts its own envelopes
-  with it and **relays all other envelopes without decrypting them**, which the verification pipeline already
+- The server issues **two keys per group**: the group key (people) and a **tracker key** (devices). Each key in
+  the grant carries an explicit `KeyRole` (`member` / `tracker`) next to its epoch, and epochs are assigned by
+  the server, unique across the server and never reused (§9.4). No reserved epoch ranges; nothing about the
+  role goes into the envelope. (`key_epoch` is 4 bytes in the AAD, ample for a server-wide counter.)
+- People get both keys and read everything. A device gets only `tracker` keys, never a `member` key: it
+  encrypts its own envelopes with the tracker key and **relays all other envelopes without decrypting them**, which the verification pipeline already
   allows (wire-format §4.4 needs no group key).
 - The certificate gets `role: 3` (tracker), so apps can show such authors differently and the server can refuse
   content types a tracker must not author (e.g. posts).
@@ -205,13 +231,29 @@ a lost device should not carry the group's messages in readable form.
 - Simulator scenarios for P1 (an online member's post reaching an offline member through a gateway) and P2
   (the closed notice removing the group's data from every node within the scenario).
 
-## 9. Open questions
+## 9. Decisions (2026-10-29)
 
-1. Should `MembershipSource` also deliver **revocations** and key-epoch changes (push), or do nodes keep
-   pulling `/sync/revocations`?
-2. Package count: is one `msgp2p_adapters` package with conditional imports preferable to several small ones?
-3. P1: one server author per group, or one per server with the group in the certificate only?
-4. P4: how is a key's class (group / tracker) carried in the grant: a reserved `key_epoch` range, or a field
-   next to each key?
-5. Should the 4 KB envelope limit stay a protocol constant, with long texts truncated by the app, or should a
-   multi-part message kind be specified?
+The open questions of the first draft, as decided by the maintainer in
+[Discussion #8](https://github.com/ESSENTIELLEMENT/msgp2p/discussions/8#discussioncomment-19257073).
+
+1. **Revocations and key-epoch changes: hybrid.** `MembershipSource` pushes the group's active revocations
+   inside `MembershipGrant`, as the server-signed `RevocationNotice`s themselves (§3). This saves a round trip
+   and closes the race in which a node holds new keys before it knows which peers were revoked. Online
+   gateways keep pulling `GatewayApi.revocations`; offline nodes learn them by gossip, which works because the
+   notices are signed and verifiable by every peer.
+2. **Packaging: separate packages** (§4), not one `msgp2p_adapters` with conditional imports: those cannot
+   remove pubspec dependencies, so a combined package would pull Flutter and a second SQLite library into
+   pure-Dart users. `msgp2p_reference_auth` stays a small package of its own.
+3. **Server author: one per group, derived with HKDF** from a server master secret, with a versioned info
+   string (P1). Continuous sequences per group keep version vectors compact; unrelated groups cannot be linked;
+   no key pair is stored per group. The certificate-signing key stays separate from the master secret.
+4. **Key class: an explicit `KeyRole` (`member` / `tracker`) next to each key** in the grant, with epochs unique
+   across the server and never reused (§3, P4). No reserved epoch ranges (brittle "magic numbers"); further
+   roles can be added later. A tracker holds only `tracker` keys and relays `member`-key envelopes unread.
+5. **Envelope size: 4 KB stays a strict protocol constant.** Larger content goes into hash-addressed attachments,
+   or is split by the app into several messages (e.g. a truncated mesh copy, with the full text from the
+   server). No multi-part envelope kind: it would add reassembly state and partial-delivery cases to every relay.
+   Airtime supports the limit: 4 KB takes roughly 6 s at LoRa SF7 and over 70 s at SF11. Regional rules can be
+   stricter still: in Japan, 920 MHz LoRa (ARIB STD-T108) limits the length of a single transmission and how
+   often a device may transmit, so a LoRa transport must send an envelope as chunks (as the broadcast framing
+   does) in any case.
