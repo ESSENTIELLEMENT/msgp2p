@@ -9,6 +9,8 @@ import '../model/receipt.dart';
 import '../model/revocation.dart';
 import '../model/version_vector.dart';
 import '../storage/message_store.dart';
+import 'gateway_api.dart';
+import 'io_http_executor.dart';
 
 /// Exception thrown when the gateway server returns an error.
 class GatewayException implements Exception {
@@ -244,21 +246,28 @@ class SyncResult {
 }
 
 /// Gateway HTTP client connecting a mobile mule node with the reference server (FR-SRV-02).
-class GatewayClient {
+///
+/// Implements [GatewayApi] using an injected [HttpExecutor] (defaulting to [IoHttpExecutor]).
+class GatewayClient implements GatewayApi {
   final String baseUrl;
   String? authToken;
-  HttpClient? _httpClient;
+  final HttpExecutor httpExecutor;
+  final bool _ownsExecutor;
 
   GatewayClient({
     required String baseUrl,
     this.authToken,
+    HttpExecutor? httpExecutor,
     HttpClient? httpClient,
   })  : baseUrl = baseUrl.endsWith('/')
             ? baseUrl.substring(0, baseUrl.length - 1)
             : baseUrl,
-        _httpClient = httpClient;
-
-  HttpClient get _client => _httpClient ??= HttpClient();
+        httpExecutor = httpExecutor ??
+            IoHttpExecutor(
+              client: httpClient,
+              closeClientOnDispose: true,
+            ),
+        _ownsExecutor = httpExecutor == null;
 
   /// Registers a new member account and obtains initial server-signed membership certificate (FR-SRV-02).
   Future<RegisterResult> register({
@@ -297,13 +306,14 @@ class GatewayClient {
   }
 
   /// Pushes a batch of message envelopes and optional author certificates to server (FR-SRV-04).
-  Future<PushResult> push({
-    required String groupId,
-    required List<Envelope> envelopes,
+  @override
+  Future<PushResult> push(
+    GroupId group,
+    List<Envelope> envelopes, {
     List<MembershipCert>? certificates,
   }) async {
     final payload = {
-      'group_id': groupId,
+      'group_id': group.hexString,
       'envelopes':
           envelopes.map((e) => base64Encode(e.toCanonicalCbor())).toList(),
       if (certificates != null && certificates.isNotEmpty)
@@ -315,27 +325,48 @@ class GatewayClient {
     return PushResult.fromJson(json);
   }
 
-  /// Pulls message delta newer than client's version vector from server (FR-SRV-05).
-  Future<PullResult> pull({
+  /// Backwards-compatible named-parameter overload for [push].
+  Future<PushResult> pushEnvelopes({
     required String groupId,
-    required VersionVector vector,
-    int limit = 100,
+    required List<Envelope> envelopes,
+    List<MembershipCert>? certificates,
+  }) =>
+      push(GroupId.from(groupId), envelopes, certificates: certificates);
+
+  /// Pulls message delta newer than client's version vector from server (FR-SRV-05).
+  @override
+  Future<PullResult> pull(
+    GroupId group,
+    VersionVector serverVector, {
+    int? limit,
   }) async {
-    final vectorCbor = vector.toCanonicalCbor();
+    final effectiveLimit = limit ?? 100;
+    final vectorCbor = serverVector.toCanonicalCbor();
     final vectorB64 = base64Encode(vectorCbor);
     final path =
-        '/sync/pull?group_id=$groupId&vector=${Uri.encodeComponent(vectorB64)}&limit=$limit';
+        '/sync/pull?group_id=${group.hexString}&vector=${Uri.encodeComponent(vectorB64)}&limit=$effectiveLimit';
 
     final json = await _get(path, requiresAuth: true);
     return PullResult.fromJson(json);
   }
 
-  /// Retrieves server-signed delivery receipts issued since [since] milliseconds (FR-SRV-05).
-  Future<List<ServerReceipt>> getReceipts({
+  /// Backwards-compatible named-parameter overload for [pull].
+  Future<PullResult> pullDelta({
     required String groupId,
-    int since = 0,
+    required VersionVector vector,
+    int limit = 100,
+  }) =>
+      pull(GroupId.from(groupId), vector, limit: limit);
+
+  /// Retrieves server-signed delivery receipts issued since [since] milliseconds (FR-SRV-05).
+  @override
+  Future<List<ServerReceipt>> receipts(
+    GroupId group, {
+    int? since,
   }) async {
-    final path = '/sync/receipts?group_id=$groupId&since=$since';
+    final effectiveSince = since ?? 0;
+    final path =
+        '/sync/receipts?group_id=${group.hexString}&since=$effectiveSince';
     final json = await _get(path, requiresAuth: true);
 
     final rawReceipts = json['receipts'] as List? ?? [];
@@ -346,12 +377,22 @@ class GatewayClient {
     }).toList();
   }
 
-  /// Retrieves server-signed member revocations issued since [since] milliseconds (FR-SRV-05).
-  Future<List<RevocationNotice>> getRevocations({
+  /// Backwards-compatible named-parameter alias for [receipts].
+  Future<List<ServerReceipt>> getReceipts({
     required String groupId,
     int since = 0,
+  }) =>
+      receipts(GroupId.from(groupId), since: since);
+
+  /// Retrieves server-signed member revocations issued since [since] milliseconds (FR-SRV-05).
+  @override
+  Future<List<RevocationNotice>> revocations(
+    GroupId group, {
+    int? since,
   }) async {
-    final path = '/sync/revocations?group_id=$groupId&since=$since';
+    final effectiveSince = since ?? 0;
+    final path =
+        '/sync/revocations?group_id=${group.hexString}&since=$effectiveSince';
     final json = await _get(path, requiresAuth: true);
 
     final rawRevs = json['revocations'] as List? ?? [];
@@ -361,6 +402,13 @@ class GatewayClient {
       return RevocationNotice.fromCbor(rawCbor);
     }).toList();
   }
+
+  /// Backwards-compatible named-parameter alias for [revocations].
+  Future<List<RevocationNotice>> getRevocations({
+    required String groupId,
+    int since = 0,
+  }) =>
+      revocations(GroupId.from(groupId), since: since);
 
   /// Issues a server-signed member revocation notice and rotates the group key epoch (FR-ID-05, FR-SEC-02).
   Future<RevokeMemberResult> revokeMember({
@@ -378,47 +426,71 @@ class GatewayClient {
   }
 
   /// Uploads a hash-addressed attachment blob to the gateway server.
-  Future<void> uploadAttachment({
-    required String groupId,
-    required Uint8List hash,
-    required String mime,
-    required Uint8List bytes,
-  }) async {
+  @override
+  Future<void> uploadAttachment(
+    GroupId group,
+    AttachmentRef ref,
+    Uint8List bytes,
+  ) async {
     final payload = {
-      'group_id': groupId,
-      'hash': hex.encode(hash),
-      'mime': mime,
+      'group_id': group.hexString,
+      'hash': hex.encode(ref.hash),
+      'mime': ref.mime,
       'data_base64': base64Encode(bytes),
     };
     await _post('/sync/attachments', payload, requiresAuth: true);
   }
 
-  /// Downloads a hash-addressed attachment blob from the gateway server.
-  Future<StoredAttachmentBlob> downloadAttachment({
+  /// Backwards-compatible named-parameter overload for [uploadAttachment].
+  Future<void> uploadAttachmentBlob({
     required String groupId,
     required Uint8List hash,
-  }) async {
-    final hashHex = hex.encode(hash);
-    final path = '/sync/attachments?group_id=$groupId&hash=$hashHex';
+    required String mime,
+    required Uint8List bytes,
+  }) =>
+      uploadAttachment(
+        GroupId.from(groupId),
+        AttachmentRef(hash: hash, size: bytes.length, mime: mime),
+        bytes,
+      );
+
+  /// Downloads a hash-addressed attachment blob from the gateway server.
+  @override
+  Future<StoredAttachmentBlob> downloadAttachment(
+    GroupId group,
+    AttachmentRef ref,
+  ) async {
+    final hashHex = hex.encode(ref.hash);
+    final path = '/sync/attachments?group_id=${group.hexString}&hash=$hashHex';
     final json = await _get(path, requiresAuth: true);
     final bytes = base64Decode(json['data_base64'] as String);
-    final mime = json['mime'] as String? ?? 'application/octet-stream';
+    final mime = json['mime'] as String? ?? ref.mime;
     return StoredAttachmentBlob(
-      hash: Uint8List.fromList(hash),
+      hash: Uint8List.fromList(ref.hash),
       mime: mime,
       bytes: bytes,
       storedAt: DateTime.now().millisecondsSinceEpoch,
     );
   }
 
+  /// Backwards-compatible named-parameter overload for [downloadAttachment].
+  Future<StoredAttachmentBlob> downloadAttachmentBlob({
+    required String groupId,
+    required Uint8List hash,
+  }) =>
+      downloadAttachment(
+        GroupId.from(groupId),
+        AttachmentRef(hash: hash, size: 0, mime: 'application/octet-stream'),
+      );
+
   /// High-level automated synchronization: pushes local unconfirmed envelopes, stores receipts,
   /// pulls server delta envelopes, reconciles revocation notices, and syncs attachment blobs (FR-SRV-02).
   Future<SyncResult> sync({
     required MessageStore store,
-    required Uint8List groupId,
+    required dynamic groupId,
     List<Envelope>? pendingEnvelopes,
   }) async {
-    final groupIdHex = hex.encode(groupId);
+    final group = GroupId.from(groupId);
 
     // 1. Determine unconfirmed envelopes to push (`IT-AMP-04`: never re-upload confirmed seqs)
     final candidates = pendingEnvelopes ?? <Envelope>[];
@@ -445,8 +517,8 @@ class GatewayClient {
 
     if (toPush.isNotEmpty) {
       final pushRes = await push(
-        groupId: groupIdHex,
-        envelopes: toPush,
+        group,
+        toPush,
         certificates: certsToPush,
       );
       acceptedCount = pushRes.acceptedIds.length;
@@ -469,10 +541,9 @@ class GatewayClient {
           if (blob != null) {
             try {
               await uploadAttachment(
-                groupId: groupIdHex,
-                hash: blob.hash,
-                mime: blob.mime,
-                bytes: blob.bytes,
+                group,
+                att,
+                blob.bytes,
               );
               uploadedHashes.add(hHex);
               attachmentsUploaded++;
@@ -485,14 +556,14 @@ class GatewayClient {
     }
 
     // 2. Fetch any additional receipts
-    final additionalReceipts = await getReceipts(groupId: groupIdHex, since: 0);
+    final additionalReceipts = await receipts(group, since: 0);
     for (final receipt in additionalReceipts) {
       await store.saveReceipt(receipt);
       receiptsCount++;
     }
 
     // 3. Reconcile active revocations
-    final revs = await getRevocations(groupId: groupIdHex, since: 0);
+    final revs = await revocations(group, since: 0);
     var revocationsCount = 0;
     for (final rev in revs) {
       await store.saveRevocation(rev);
@@ -502,8 +573,8 @@ class GatewayClient {
     // 4. Pull missing delta envelopes
     final localVector = await store.getVersionVector();
     final pullRes = await pull(
-      groupId: groupIdHex,
-      vector: localVector,
+      group,
+      localVector,
       limit: 200,
     );
 
@@ -518,8 +589,8 @@ class GatewayClient {
     for (final att in missingAtts) {
       try {
         final blob = await downloadAttachment(
-          groupId: groupIdHex,
-          hash: att.hash,
+          group,
+          att,
         );
         final saved = await store.saveAttachmentBlob(
           hash: blob.hash,
@@ -551,20 +622,25 @@ class GatewayClient {
     required bool requiresAuth,
   }) async {
     final uri = _resolveUri(endpoint);
-    final request = await _client.postUrl(uri);
-    request.headers.set('Content-Type', 'application/json');
-    if (requiresAuth && authToken != null) {
-      request.headers.set('Authorization', 'Bearer $authToken');
-    }
-    request.write(jsonEncode(body));
+    final headers = <String, String>{
+      'content-type': 'application/json',
+      'accept': 'application/json',
+      if (requiresAuth && authToken != null)
+        'authorization': 'Bearer $authToken',
+    };
+    final bodyBytes = Uint8List.fromList(utf8.encode(jsonEncode(body)));
 
-    final response = await request.close();
-    final responseBody = await response.transform(utf8.decoder).join();
+    final reply = await httpExecutor.send(
+      'POST',
+      uri,
+      headers: headers,
+      body: bodyBytes,
+    );
 
-    final json = jsonDecode(responseBody) as Map<String, dynamic>;
-    if (response.statusCode >= 400) {
+    final json = jsonDecode(reply.bodyAsString) as Map<String, dynamic>;
+    if (reply.statusCode >= 400) {
       throw GatewayException(
-        statusCode: response.statusCode,
+        statusCode: reply.statusCode,
         error: json['error'] as String? ?? 'ERROR',
         message: json['message'] as String? ?? 'Unknown server error',
       );
@@ -578,19 +654,22 @@ class GatewayClient {
     required bool requiresAuth,
   }) async {
     final uri = _resolveUri(endpoint);
-    final request = await _client.getUrl(uri);
-    request.headers.set('Accept', 'application/json');
-    if (requiresAuth && authToken != null) {
-      request.headers.set('Authorization', 'Bearer $authToken');
-    }
+    final headers = <String, String>{
+      'accept': 'application/json',
+      if (requiresAuth && authToken != null)
+        'authorization': 'Bearer $authToken',
+    };
 
-    final response = await request.close();
-    final responseBody = await response.transform(utf8.decoder).join();
+    final reply = await httpExecutor.send(
+      'GET',
+      uri,
+      headers: headers,
+    );
 
-    final json = jsonDecode(responseBody) as Map<String, dynamic>;
-    if (response.statusCode >= 400) {
+    final json = jsonDecode(reply.bodyAsString) as Map<String, dynamic>;
+    if (reply.statusCode >= 400) {
       throw GatewayException(
-        statusCode: response.statusCode,
+        statusCode: reply.statusCode,
         error: json['error'] as String? ?? 'ERROR',
         message: json['message'] as String? ?? 'Unknown server error',
       );
@@ -606,6 +685,8 @@ class GatewayClient {
   }
 
   void close() {
-    _httpClient?.close();
+    if (_ownsExecutor && httpExecutor is IoHttpExecutor) {
+      (httpExecutor as IoHttpExecutor).close();
+    }
   }
 }

@@ -1,4 +1,5 @@
 import 'package:cbor/cbor.dart' as cbor;
+import 'package:convert/convert.dart';
 import '../crypto/random_source.dart';
 import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart' as cg;
@@ -120,6 +121,9 @@ class EnvelopeCore {
   /// Deterministic content-addressed message ID: SHA-256(canonical_cbor(core)).
   Uint8List get messageId => MsgP2PCrypto.sha256(toCanonicalCbor());
 
+  /// Hex-encoded message ID.
+  String get messageIdHex => hex.encode(messageId);
+
   /// Associated Data (AAD) for XChaCha20-Poly1305 encryption/decryption:
   /// group_id (16 bytes) || epoch (4 bytes BE) || author (32 bytes) || seq (8 bytes BE)
   Uint8List computeAad() {
@@ -155,6 +159,9 @@ class Envelope {
 
   /// The content-addressed deterministic ID of this message.
   Uint8List get messageId => core.messageId;
+
+  /// Hex-encoded message ID.
+  String get messageIdHex => core.messageIdHex;
 
   /// Map representation for Canonical CBOR encoding.
   Map<String, dynamic> toMap() => {

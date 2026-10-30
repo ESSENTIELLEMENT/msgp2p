@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- **`GatewayApi` & `HttpExecutor` ports** (proposal 0001, step 3):
+  - Added `GroupId` 16-byte value type with hex string conversions and strict byte length validation.
+  - Added `HttpReply` and `HttpExecutor` abstract port interface, decoupling HTTP operations from `dart:io` `HttpClient`.
+  - Added `IoHttpExecutor` default `dart:io` implementation and `MockHttpExecutor` for headless unit testing.
+  - Added `GatewayApi` interface port defining `push`, `pull`, `receipts`, `revocations`, `uploadAttachment`, and `downloadAttachment`.
+  - Added `MemoryGatewayApi` in-memory implementation for tests, simulation environments, and contract verification.
+  - `GatewayClient` now implements `GatewayApi` and accepts an optional host-supplied `HttpExecutor` (defaults to `IoHttpExecutor`).
+  - Added `runGatewayApiContractTests` shared contract test suite (`test/gateway_api_contract.dart`).
+  - Added `messageIdHex` getter to `Envelope` and `EnvelopeCore`.
+  - Added `id` getter to `GroupMembership` returning `GroupId`.
+
 ## 1.1.0
 
 - **KeyVault port** (proposal 0001, step 2; Discussion #10): `KeyVault`, `IdentitySeeds`, `KeyVaultLoad`,
