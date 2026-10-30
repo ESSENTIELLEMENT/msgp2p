@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:convert/convert.dart';
 import 'package:meta/meta.dart';
@@ -10,23 +9,11 @@ import '../model/revocation.dart';
 import '../model/version_vector.dart';
 import '../storage/message_store.dart';
 import 'gateway_api.dart';
-import 'io_http_executor.dart';
+import 'io_http_executor_stub.dart'
+    if (dart.library.io) 'io_http_executor.dart';
 
-/// Exception thrown when the gateway server returns an error.
-class GatewayException implements Exception {
-  final int statusCode;
-  final String error;
-  final String message;
-
-  const GatewayException({
-    required this.statusCode,
-    required this.error,
-    required this.message,
-  });
-
-  @override
-  String toString() => 'GatewayException($statusCode, $error): $message';
-}
+export 'gateway_api.dart'
+    show GatewayException, RejectedItem, PushResult, PullResult, SyncResult;
 
 /// Result of user registration.
 @immutable
@@ -108,94 +95,6 @@ class LoginResult {
   }
 }
 
-/// Rejected envelope item with specific failure reason.
-@immutable
-class RejectedItem {
-  final String messageId;
-  final String reason;
-
-  const RejectedItem({required this.messageId, required this.reason});
-
-  factory RejectedItem.fromJson(Map<String, dynamic> json) {
-    return RejectedItem(
-      messageId: json['message_id'] as String,
-      reason: json['reason'] as String,
-    );
-  }
-}
-
-/// Result of envelope ingestion push.
-@immutable
-class PushResult {
-  final List<String> acceptedIds;
-  final List<RejectedItem> rejected;
-  final List<ServerReceipt> receipts;
-
-  const PushResult({
-    required this.acceptedIds,
-    required this.rejected,
-    required this.receipts,
-  });
-
-  factory PushResult.fromJson(Map<String, dynamic> json) {
-    final accepted = (json['accepted_ids'] as List? ?? []).cast<String>();
-    final rawRejected = json['rejected'] as List? ?? [];
-    final rejected = rawRejected
-        .map((r) => RejectedItem.fromJson(r as Map<String, dynamic>))
-        .toList();
-
-    final rawReceipts = json['receipts'] as List? ?? [];
-    final receipts = rawReceipts.map((r) {
-      final rMap = r as Map<String, dynamic>;
-      final rawCbor = base64Decode(rMap['raw_cbor_base64'] as String);
-      return ServerReceipt.fromCbor(rawCbor);
-    }).toList();
-
-    return PushResult(
-      acceptedIds: accepted,
-      rejected: rejected,
-      receipts: receipts,
-    );
-  }
-}
-
-/// Result of envelope delta pull.
-@immutable
-class PullResult {
-  final List<Envelope> envelopes;
-  final bool hasMore;
-  final VersionVector? serverVector;
-
-  const PullResult({
-    required this.envelopes,
-    required this.hasMore,
-    this.serverVector,
-  });
-
-  factory PullResult.fromJson(Map<String, dynamic> json) {
-    final rawEnvelopes = json['envelopes'] as List? ?? [];
-    final envelopes = rawEnvelopes.map((e) {
-      final rawCbor = base64Decode(e as String);
-      return Envelope.fromCbor(rawCbor);
-    }).toList();
-
-    VersionVector? vec;
-    final rawServerVec = json['server_vector'] as String?;
-    if (rawServerVec != null && rawServerVec.isNotEmpty) {
-      try {
-        final vecBytes = base64Decode(rawServerVec);
-        vec = VersionVector.fromCbor(vecBytes);
-      } catch (_) {}
-    }
-
-    return PullResult(
-      envelopes: envelopes,
-      hasMore: json['has_more'] as bool? ?? false,
-      serverVector: vec,
-    );
-  }
-}
-
 /// Result of revoking a group member and rotating the group key epoch (FR-SEC-02).
 @immutable
 class RevokeMemberResult {
@@ -217,34 +116,6 @@ class RevokeMemberResult {
   }
 }
 
-/// Summary of an automated bidirectional sync operation with gateway.
-@immutable
-class SyncResult {
-  final int pushedCount;
-  final int acceptedCount;
-  final int pulledCount;
-  final int receiptsCount;
-  final int revocationsCount;
-  final int attachmentsUploaded;
-  final int attachmentsDownloaded;
-
-  const SyncResult({
-    required this.pushedCount,
-    required this.acceptedCount,
-    required this.pulledCount,
-    required this.receiptsCount,
-    required this.revocationsCount,
-    this.attachmentsUploaded = 0,
-    this.attachmentsDownloaded = 0,
-  });
-
-  @override
-  String toString() =>
-      'SyncResult(pushed: $pushedCount, accepted: $acceptedCount, pulled: $pulledCount, '
-      'receipts: $receiptsCount, revocations: $revocationsCount, '
-      'attUp: $attachmentsUploaded, attDown: $attachmentsDownloaded)';
-}
-
 /// Gateway HTTP client connecting a mobile mule node with the reference server (FR-SRV-02).
 ///
 /// Implements [GatewayApi] using an injected [HttpExecutor] (defaulting to [IoHttpExecutor]).
@@ -258,15 +129,17 @@ class GatewayClient implements GatewayApi {
     required String baseUrl,
     this.authToken,
     HttpExecutor? httpExecutor,
-    HttpClient? httpClient,
-  })  : baseUrl = baseUrl.endsWith('/')
+    @Deprecated(
+        'Pass httpExecutor: IoHttpExecutor(client: ...) instead (proposal 0001, step 3)')
+    Object? httpClient,
+  })  : assert(
+          httpExecutor == null || httpClient == null,
+          'Cannot specify both httpExecutor and httpClient',
+        ),
+        baseUrl = baseUrl.endsWith('/')
             ? baseUrl.substring(0, baseUrl.length - 1)
             : baseUrl,
-        httpExecutor = httpExecutor ??
-            IoHttpExecutor(
-              client: httpClient,
-              closeClientOnDispose: true,
-            ),
+        httpExecutor = httpExecutor ?? IoHttpExecutor(client: httpClient),
         _ownsExecutor = httpExecutor == null;
 
   /// Registers a new member account and obtains initial server-signed membership certificate (FR-SRV-02).
@@ -325,7 +198,7 @@ class GatewayClient implements GatewayApi {
     return PushResult.fromJson(json);
   }
 
-  /// Backwards-compatible named-parameter overload for [push].
+  /// Convenience named-parameter helper forwarding to [push].
   Future<PushResult> pushEnvelopes({
     required String groupId,
     required List<Envelope> envelopes,
@@ -333,15 +206,15 @@ class GatewayClient implements GatewayApi {
   }) =>
       push(GroupId.from(groupId), envelopes, certificates: certificates);
 
-  /// Pulls message delta newer than client's version vector from server (FR-SRV-05).
+  /// Pulls message delta missing from the client's [knownVector] from server (FR-SRV-05).
   @override
   Future<PullResult> pull(
     GroupId group,
-    VersionVector serverVector, {
+    VersionVector knownVector, {
     int? limit,
   }) async {
     final effectiveLimit = limit ?? 100;
-    final vectorCbor = serverVector.toCanonicalCbor();
+    final vectorCbor = knownVector.toCanonicalCbor();
     final vectorB64 = base64Encode(vectorCbor);
     final path =
         '/sync/pull?group_id=${group.hexString}&vector=${Uri.encodeComponent(vectorB64)}&limit=$effectiveLimit';
@@ -350,7 +223,7 @@ class GatewayClient implements GatewayApi {
     return PullResult.fromJson(json);
   }
 
-  /// Backwards-compatible named-parameter overload for [pull].
+  /// Convenience named-parameter helper forwarding to [pull].
   Future<PullResult> pullDelta({
     required String groupId,
     required VersionVector vector,
@@ -358,7 +231,7 @@ class GatewayClient implements GatewayApi {
   }) =>
       pull(GroupId.from(groupId), vector, limit: limit);
 
-  /// Retrieves server-signed delivery receipts issued since [since] milliseconds (FR-SRV-05).
+  /// Retrieves server-signed delivery receipts issued strictly after [since] milliseconds (FR-SRV-05).
   @override
   Future<List<ServerReceipt>> receipts(
     GroupId group, {
@@ -384,7 +257,7 @@ class GatewayClient implements GatewayApi {
   }) =>
       receipts(GroupId.from(groupId), since: since);
 
-  /// Retrieves server-signed member revocations issued since [since] milliseconds (FR-SRV-05).
+  /// Retrieves server-signed member revocations issued strictly after [since] milliseconds (FR-SRV-05).
   @override
   Future<List<RevocationNotice>> revocations(
     GroupId group, {
@@ -432,6 +305,11 @@ class GatewayClient implements GatewayApi {
     AttachmentRef ref,
     Uint8List bytes,
   ) async {
+    if (!verifyAttachmentBytesHash(ref.hash, bytes)) {
+      throw ArgumentError(
+        'Attachment SHA-256 digest does not match AttachmentRef.hash',
+      );
+    }
     final payload = {
       'group_id': group.hexString,
       'hash': hex.encode(ref.hash),
@@ -441,7 +319,7 @@ class GatewayClient implements GatewayApi {
     await _post('/sync/attachments', payload, requiresAuth: true);
   }
 
-  /// Backwards-compatible named-parameter overload for [uploadAttachment].
+  /// Convenience named-parameter helper forwarding to [uploadAttachment].
   Future<void> uploadAttachmentBlob({
     required String groupId,
     required Uint8List hash,
@@ -454,16 +332,48 @@ class GatewayClient implements GatewayApi {
         bytes,
       );
 
-  /// Downloads a hash-addressed attachment blob from the gateway server.
+  /// Downloads a hash-addressed attachment blob from the gateway server and verifies its SHA-256 hash.
   @override
   Future<StoredAttachmentBlob> downloadAttachment(
     GroupId group,
     AttachmentRef ref,
   ) async {
+    if (ref.hash.length != 32) {
+      throw ArgumentError.value(
+        ref.hash.length,
+        'ref.hash.length',
+        'Attachment SHA-256 hash must be 32 bytes',
+      );
+    }
     final hashHex = hex.encode(ref.hash);
     final path = '/sync/attachments?group_id=${group.hexString}&hash=$hashHex';
     final json = await _get(path, requiresAuth: true);
-    final bytes = base64Decode(json['data_base64'] as String);
+    final rawDataB64 = json['data_base64'];
+    if (rawDataB64 is! String) {
+      throw const GatewayException(
+        statusCode: 502,
+        error: 'INVALID_RESPONSE',
+        message: 'Missing data_base64 in attachment response',
+      );
+    }
+    final Uint8List bytes;
+    try {
+      bytes = base64Decode(rawDataB64);
+    } on FormatException catch (e) {
+      throw GatewayException(
+        statusCode: 502,
+        error: 'INVALID_RESPONSE',
+        message: 'Invalid base64 in attachment response: ${e.message}',
+      );
+    }
+    if (!verifyAttachmentBytesHash(ref.hash, bytes)) {
+      throw const GatewayException(
+        statusCode: 502,
+        error: 'ATTACHMENT_HASH_MISMATCH',
+        message:
+            'Downloaded attachment SHA-256 digest does not match expected hash',
+      );
+    }
     final mime = json['mime'] as String? ?? ref.mime;
     return StoredAttachmentBlob(
       hash: Uint8List.fromList(ref.hash),
@@ -473,7 +383,7 @@ class GatewayClient implements GatewayApi {
     );
   }
 
-  /// Backwards-compatible named-parameter overload for [downloadAttachment].
+  /// Convenience named-parameter helper forwarding to [downloadAttachment].
   Future<StoredAttachmentBlob> downloadAttachmentBlob({
     required String groupId,
     required Uint8List hash,
@@ -483,138 +393,17 @@ class GatewayClient implements GatewayApi {
         AttachmentRef(hash: hash, size: 0, mime: 'application/octet-stream'),
       );
 
-  /// High-level automated synchronization: pushes local unconfirmed envelopes, stores receipts,
-  /// pulls server delta envelopes, reconciles revocation notices, and syncs attachment blobs (FR-SRV-02).
+  /// High-level automated synchronization: delegates to [GatewayApiSync.syncStore] (`FR-SRV-02`).
   Future<SyncResult> sync({
     required MessageStore store,
-    required dynamic groupId,
+    required Object groupId,
     List<Envelope>? pendingEnvelopes,
-  }) async {
-    final group = GroupId.from(groupId);
-
-    // 1. Determine unconfirmed envelopes to push (`IT-AMP-04`: never re-upload confirmed seqs)
-    final candidates = pendingEnvelopes ?? <Envelope>[];
-    final toPush = <Envelope>[];
-    for (final env in candidates) {
-      final confirmed = await store.isConfirmed(env.core.author, env.core.seq);
-      if (!confirmed) {
-        toPush.add(env);
-      }
-    }
-
-    // Gather certificates for authors of pushed envelopes
-    final certsToPush = <MembershipCert>[];
-    for (final env in toPush) {
-      final cert = await store.getCertificate(env.certRef);
-      if (cert != null) {
-        certsToPush.add(cert);
-      }
-    }
-
-    var acceptedCount = 0;
-    var receiptsCount = 0;
-    var attachmentsUploaded = 0;
-
-    if (toPush.isNotEmpty) {
-      final pushRes = await push(
-        group,
-        toPush,
-        certificates: certsToPush,
+  }) =>
+      syncStore(
+        store: store,
+        groupId: groupId,
+        pendingEnvelopes: pendingEnvelopes,
       );
-      acceptedCount = pushRes.acceptedIds.length;
-
-      // Save returned receipts into store
-      for (final receipt in pushRes.receipts) {
-        await store.saveReceipt(receipt);
-        receiptsCount++;
-      }
-
-      // Upload any attachment blobs referenced by pushed envelopes
-      final uploadedHashes = <String>{};
-      for (final env in toPush) {
-        final atts = env.core.attachments;
-        if (atts == null) continue;
-        for (final att in atts) {
-          final hHex = hex.encode(att.hash);
-          if (uploadedHashes.contains(hHex)) continue;
-          final blob = await store.getAttachmentBlob(att.hash);
-          if (blob != null) {
-            try {
-              await uploadAttachment(
-                group,
-                att,
-                blob.bytes,
-              );
-              uploadedHashes.add(hHex);
-              attachmentsUploaded++;
-            } catch (_) {
-              // Ignore if server doesn't support attachments in legacy mock
-            }
-          }
-        }
-      }
-    }
-
-    // 2. Fetch any additional receipts
-    final additionalReceipts = await receipts(group, since: 0);
-    for (final receipt in additionalReceipts) {
-      await store.saveReceipt(receipt);
-      receiptsCount++;
-    }
-
-    // 3. Reconcile active revocations
-    final revs = await revocations(group, since: 0);
-    var revocationsCount = 0;
-    for (final rev in revs) {
-      await store.saveRevocation(rev);
-      revocationsCount++;
-    }
-
-    // 4. Pull missing delta envelopes
-    final localVector = await store.getVersionVector();
-    final pullRes = await pull(
-      group,
-      localVector,
-      limit: 200,
-    );
-
-    var pulledCount = 0;
-    if (pullRes.envelopes.isNotEmpty) {
-      pulledCount = await store.saveBatch(pullRes.envelopes);
-    }
-
-    // 5. Download any missing attachment blobs from server
-    var attachmentsDownloaded = 0;
-    final missingAtts = await store.getMissingAttachments();
-    for (final att in missingAtts) {
-      try {
-        final blob = await downloadAttachment(
-          group,
-          att,
-        );
-        final saved = await store.saveAttachmentBlob(
-          hash: blob.hash,
-          mime: blob.mime,
-          bytes: blob.bytes,
-        );
-        if (saved) {
-          attachmentsDownloaded++;
-        }
-      } catch (_) {
-        // Attachment may not be uploaded to server yet
-      }
-    }
-
-    return SyncResult(
-      pushedCount: toPush.length,
-      acceptedCount: acceptedCount,
-      pulledCount: pulledCount,
-      receiptsCount: receiptsCount,
-      revocationsCount: revocationsCount,
-      attachmentsUploaded: attachmentsUploaded,
-      attachmentsDownloaded: attachmentsDownloaded,
-    );
-  }
 
   Future<Map<String, dynamic>> _post(
     String endpoint,
@@ -637,16 +426,7 @@ class GatewayClient implements GatewayApi {
       body: bodyBytes,
     );
 
-    final json = jsonDecode(reply.bodyAsString) as Map<String, dynamic>;
-    if (reply.statusCode >= 400) {
-      throw GatewayException(
-        statusCode: reply.statusCode,
-        error: json['error'] as String? ?? 'ERROR',
-        message: json['message'] as String? ?? 'Unknown server error',
-      );
-    }
-
-    return json;
+    return _decodeJsonResponse(reply);
   }
 
   Future<Map<String, dynamic>> _get(
@@ -666,21 +446,55 @@ class GatewayClient implements GatewayApi {
       headers: headers,
     );
 
-    final json = jsonDecode(reply.bodyAsString) as Map<String, dynamic>;
+    return _decodeJsonResponse(reply);
+  }
+
+  Map<String, dynamic> _decodeJsonResponse(HttpReply reply) {
+    String bodyText;
+    try {
+      bodyText = reply.bodyAsString;
+    } on FormatException {
+      bodyText = utf8.decode(reply.body, allowMalformed: true);
+    }
+
+    Map<String, dynamic>? decodedMap;
+    final trimmed = bodyText.trim();
+    if (trimmed.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(trimmed);
+        if (decoded is Map<String, dynamic>) {
+          decodedMap = decoded;
+        } else if (decoded is Map) {
+          decodedMap = decoded.map((k, v) => MapEntry(k.toString(), v));
+        }
+      } on FormatException {
+        // Non-JSON body (e.g. HTML reverse-proxy 502/503 page or plain text)
+      }
+    }
+
     if (reply.statusCode >= 400) {
       throw GatewayException(
         statusCode: reply.statusCode,
-        error: json['error'] as String? ?? 'ERROR',
-        message: json['message'] as String? ?? 'Unknown server error',
+        error: decodedMap?['error'] as String? ?? 'HTTP_${reply.statusCode}',
+        message: decodedMap?['message'] as String? ??
+            (trimmed.isNotEmpty ? trimmed : 'HTTP ${reply.statusCode} error'),
       );
     }
 
-    return json;
+    if (decodedMap == null) {
+      throw GatewayException(
+        statusCode: reply.statusCode,
+        error: 'INVALID_RESPONSE',
+        message: 'Expected JSON object response from gateway, got: '
+            '${trimmed.length > 200 ? '${trimmed.substring(0, 200)}...' : trimmed}',
+      );
+    }
+
+    return decodedMap;
   }
 
   Uri _resolveUri(String endpoint) {
     final cleanEndpoint = endpoint.startsWith('/') ? endpoint : '/$endpoint';
-    // If baseUrl already includes /api/v1, or server router handles both
     return Uri.parse('$baseUrl$cleanEndpoint');
   }
 

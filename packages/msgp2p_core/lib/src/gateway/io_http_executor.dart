@@ -4,14 +4,24 @@ import 'gateway_api.dart';
 
 /// Default [HttpExecutor] using `dart:io` [HttpClient].
 class IoHttpExecutor implements HttpExecutor {
-  final HttpClient _client;
+  HttpClient? _client;
   final bool _closeClientOnDispose;
 
+  /// Creates an [IoHttpExecutor].
+  ///
+  /// If [client] is omitted, an internal [HttpClient] is lazily created on first
+  /// request and closed on [close]. If an external [client] is supplied,
+  /// [closeClientOnDispose] defaults to `false` so shared host clients are not
+  /// prematurely closed unless explicitly requested.
   IoHttpExecutor({
-    HttpClient? client,
-    bool closeClientOnDispose = true,
-  })  : _client = client ?? HttpClient(),
-        _closeClientOnDispose = closeClientOnDispose;
+    Object? client,
+    bool? closeClientOnDispose,
+  })  : assert(client == null || client is HttpClient,
+            'IoHttpExecutor client must be a dart:io HttpClient'),
+        _client = client as HttpClient?,
+        _closeClientOnDispose = closeClientOnDispose ?? (client == null);
+
+  HttpClient get _httpClient => _client ??= HttpClient();
 
   @override
   Future<HttpReply> send(
@@ -20,12 +30,17 @@ class IoHttpExecutor implements HttpExecutor {
     Map<String, String>? headers,
     Uint8List? body,
   }) async {
-    final request = await _client.openUrl(method, url);
-    headers?.forEach((name, value) {
-      request.headers.set(name, value);
-    });
-    if (body != null && body.isNotEmpty) {
-      request.add(body);
+    final request = await _httpClient.openUrl(method, url);
+    try {
+      headers?.forEach((name, value) {
+        request.headers.set(name, value);
+      });
+      if (body != null && body.isNotEmpty) {
+        request.add(body);
+      }
+    } catch (_) {
+      request.abort();
+      rethrow;
     }
 
     final response = await request.close();
@@ -46,10 +61,11 @@ class IoHttpExecutor implements HttpExecutor {
     );
   }
 
-  /// Closes the underlying [HttpClient].
+  /// Closes the underlying [HttpClient] if owned by this executor (or if
+  /// `closeClientOnDispose` was set to `true`).
   void close({bool force = false}) {
     if (_closeClientOnDispose) {
-      _client.close(force: force);
+      _client?.close(force: force);
     }
   }
 }

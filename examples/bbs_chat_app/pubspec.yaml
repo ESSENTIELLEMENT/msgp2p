@@ -15,6 +15,10 @@ dependencies:
     path: ../../packages/msgp2p_core
   cryptography: ^2.7.0
 
+dependency_overrides:
+  msgp2p_core:
+    path: ../../packages/msgp2p_core
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -21,7 +21,10 @@ void main() {
     });
 
     Future<MsgP2PNode> createProvisionedNode(
-        String address, int seedByte) async {
+      String address,
+      int seedByte, {
+      GatewayApi? gateway,
+    }) async {
       final signSeed = Uint8List.fromList(List.filled(32, seedByte));
       final noiseSeed = Uint8List.fromList(List.filled(32, seedByte + 50));
 
@@ -63,6 +66,7 @@ void main() {
           groupId: groupId,
         ),
         transport: transport,
+        gateway: gateway,
         keyVault: MemoryKeyVault.fromSeeds(
             IdentitySeeds(signing: signSeed, noise: noiseSeed)),
         initialCert: cert,
@@ -153,6 +157,49 @@ void main() {
           equals(MessageDeliveryStatus.serverConfirmed));
       expect(confirmedMsgs.last.status,
           equals(MessageDeliveryStatus.serverConfirmed));
+    });
+
+    test('syncWithGateway syncs over an injected GatewayApi port', () async {
+      final sharedGateway = MemoryGatewayApi(
+        serverPublicKey: serverPubkey,
+        serverSigningKeyPair: serverKeyPair,
+      );
+      final nodeAlice = await createProvisionedNode(
+        'AA:BB:CC:00:11',
+        31,
+        gateway: sharedGateway,
+      );
+      final nodeBob = await createProvisionedNode(
+        'AA:BB:CC:00:12',
+        42,
+        gateway: sharedGateway,
+      );
+      addTearDown(() async {
+        await nodeAlice.dispose();
+        await nodeBob.dispose();
+      });
+
+      await nodeAlice.publish(
+        type: 'sos',
+        body: {'title': 'SOS via GatewayApi'},
+        priority: Priority.sos,
+      );
+
+      final aliceSync = await nodeAlice.syncWithGateway();
+      expect(aliceSync.pushedCount, equals(1));
+      expect(aliceSync.acceptedCount, equals(1));
+      expect(aliceSync.receiptsCount, greaterThanOrEqualTo(1));
+
+      final aliceMsgs = await nodeAlice.getDecryptedMessages();
+      expect(aliceMsgs.single.status,
+          equals(MessageDeliveryStatus.serverConfirmed));
+
+      final bobSync = await nodeBob.syncWithGateway();
+      expect(bobSync.pulledCount, equals(1));
+      final bobMsgs = await nodeBob.getDecryptedMessages();
+      expect(bobMsgs.single.body['title'], equals('SOS via GatewayApi'));
+      expect(
+          bobMsgs.single.status, equals(MessageDeliveryStatus.serverConfirmed));
     });
   });
 }

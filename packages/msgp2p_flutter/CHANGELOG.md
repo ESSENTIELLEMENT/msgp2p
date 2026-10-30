@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `MsgP2PNode.initialize(gateway: ..., httpExecutor: ...)` (proposal 0001, step 3): `MsgP2PNode` now accepts a
+  host-supplied `GatewayApi` or `HttpExecutor` and routes `syncWithGateway()` through `GatewayApiSync.syncStore`.
 - `MsgP2PNode.initialize(keyVault: ...)` (proposal 0001, step 2): the identity comes from a `KeyVault`; the
   store is checked against it before the node authors, and the node continues its sequence numbers from the
   store after a restart (before, they started again at 1). `signingSeed` / `noiseSeed` are deprecated and will

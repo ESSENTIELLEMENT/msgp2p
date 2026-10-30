@@ -3,15 +3,14 @@
 ## Unreleased
 
 - **`GatewayApi` & `HttpExecutor` ports** (proposal 0001, step 3):
-  - Added `GroupId` 16-byte value type with hex string conversions and strict byte length validation.
-  - Added `HttpReply` and `HttpExecutor` abstract port interface, decoupling HTTP operations from `dart:io` `HttpClient`.
-  - Added `IoHttpExecutor` default `dart:io` implementation and `MockHttpExecutor` for headless unit testing.
-  - Added `GatewayApi` interface port defining `push`, `pull`, `receipts`, `revocations`, `uploadAttachment`, and `downloadAttachment`.
-  - Added `MemoryGatewayApi` in-memory implementation for tests, simulation environments, and contract verification.
-  - `GatewayClient` now implements `GatewayApi` and accepts an optional host-supplied `HttpExecutor` (defaults to `IoHttpExecutor`).
-  - Added `runGatewayApiContractTests` shared contract test suite (`test/gateway_api_contract.dart`).
-  - Added `messageIdHex` getter to `Envelope` and `EnvelopeCore`.
-  - Added `id` getter to `GroupMembership` returning `GroupId`.
+  - Added `GroupId` 16-byte immutable value type with defensive byte copying, hex string conversions, and strict length validation across all constructors.
+  - Added `HttpReply` and `HttpExecutor` abstract port interface, decoupling gateway HTTP operations from `dart:io` `HttpClient` via conditional export (`io_http_executor_stub.dart` on Web/Wasm, `IoHttpExecutor` on `dart:io`).
+  - Added `MockHttpExecutor` for socket-less unit testing.
+  - Added `GatewayApi` interface port (`push`, `pull`, `receipts`, `revocations`, `uploadAttachment`, `downloadAttachment`) and `GatewayApiSync.syncStore` extension for bidirectional `MessageStore` synchronization over any `GatewayApi`.
+  - Added `MemoryGatewayApi` in-memory implementation with priority-sorted delta pull, computed `serverVector`, strict `since` filtering, group isolation, and SHA-256 attachment integrity checks.
+  - **Breaking on `GatewayClient`**: `GatewayClient` now implements `GatewayApi` directly (positional `GroupId` / `AttachmentRef` parameters on `push`, `pull`, `uploadAttachment`, `downloadAttachment`; convenience named helpers `pushEnvelopes`, `pullDelta`, `getReceipts`, `getRevocations`, `uploadAttachmentBlob`, `downloadAttachmentBlob` are also provided), verifies downloaded attachment SHA-256 hashes, handles non-JSON error responses cleanly, and accepts an optional host-supplied `HttpExecutor`.
+  - Added `runGatewayApiContractTests` shared contract test suite (`test/gateway_api_contract.dart`), executed against `MemoryGatewayApi`, `GatewayClient` (`MockHttpExecutor`), and `GatewayClient` (`IoHttpExecutor` + `HttpServer`).
+  - Added `messageIdHex` getter to `Envelope` and `EnvelopeCore`, and `id` getter to `GroupMembership`.
 
 ## 1.1.0
 
