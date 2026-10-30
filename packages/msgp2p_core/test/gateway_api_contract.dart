@@ -354,6 +354,7 @@ void runGatewayApiContractTests(
       final aliceSync = await ctx.api.syncStore(
         store: aliceStore,
         groupId: ctx.groupId,
+        pinnedServerKey: ctx.serverPublicKey,
         pendingEnvelopes: [env],
       );
       expect(aliceSync.pushedCount, equals(1));
@@ -365,6 +366,7 @@ void runGatewayApiContractTests(
       final bobSync = await ctx.api.syncStore(
         store: bobStore,
         groupId: ctx.groupId,
+        pinnedServerKey: ctx.serverPublicKey,
       );
       expect(bobSync.pulledCount, equals(1));
       expect(bobSync.attachmentsDownloaded, equals(1));

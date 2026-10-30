@@ -606,7 +606,9 @@ class MsgP2PNode {
     final syncRes = await gateway.syncStore(
       store: store,
       groupId: config.groupId,
+      pinnedServerKey: config.serverPublicKey,
       pendingEnvelopes: unconfirmed,
+      clock: clock,
     );
 
     await _refreshKnownEnvelopesFromStore();

@@ -10,6 +10,7 @@ import '../model/receipt.dart';
 import '../model/revocation.dart';
 import '../model/version_vector.dart';
 import '../storage/message_store.dart';
+import '../sync/clock_rules.dart';
 
 /// 16-byte unique identifier for a msgp2p group.
 @immutable
@@ -345,14 +346,25 @@ abstract interface class GatewayApi {
 
 /// High-level bidirectional [MessageStore] synchronization over any [GatewayApi] port.
 extension GatewayApiSync on GatewayApi {
-  /// Pushes local unconfirmed envelopes, stores receipts, pulls delta envelopes,
-  /// reconciles revocation notices, and syncs attachment blobs (`FR-SRV-02`).
+  /// Pushes local unconfirmed envelopes, verifies and stores server-signed receipts
+  /// and revocation notices against [pinnedServerKey], verifies and pulls missing
+  /// delta envelopes, and syncs attachment blobs (`FR-SRV-02`).
   Future<SyncResult> syncStore({
     required MessageStore store,
     required Object groupId,
+    required Uint8List pinnedServerKey,
     List<Envelope>? pendingEnvelopes,
+    Clock? clock,
   }) async {
+    if (pinnedServerKey.length != 32) {
+      throw ArgumentError.value(
+        pinnedServerKey.length,
+        'pinnedServerKey.length',
+        'Pinned server Ed25519 public key must be 32 bytes',
+      );
+    }
     final group = GroupId.from(groupId);
+    final nowMs = (clock ?? const SystemClock()).now().millisecondsSinceEpoch;
 
     // 1. Determine unconfirmed envelopes to push (`IT-AMP-04`: never re-upload confirmed seqs)
     final candidates = pendingEnvelopes ?? <Envelope>[];
@@ -389,8 +401,11 @@ extension GatewayApiSync on GatewayApi {
       acceptedCount = pushRes.acceptedIds.length;
 
       for (final receipt in pushRes.receipts) {
-        await store.saveReceipt(receipt);
-        receiptsCount++;
+        if (_constantTimeBytesEqual(receipt.groupId, group.bytes) &&
+            await receipt.verify(pinnedServerKey)) {
+          await store.saveReceipt(receipt);
+          receiptsCount++;
+        }
       }
 
       // Upload any attachment blobs referenced by pushed envelopes
@@ -419,23 +434,29 @@ extension GatewayApiSync on GatewayApi {
       }
     }
 
-    // 2. Fetch any additional receipts
+    // 2. Fetch any additional receipts and verify against pinned server key
     final additionalReceipts = await receipts(group, since: 0);
     for (final receipt in additionalReceipts) {
-      await store.saveReceipt(receipt);
-      receiptsCount++;
+      if (_constantTimeBytesEqual(receipt.groupId, group.bytes) &&
+          await receipt.verify(pinnedServerKey)) {
+        await store.saveReceipt(receipt);
+        receiptsCount++;
+      }
     }
 
-    // 3. Reconcile active revocations
+    // 3. Reconcile active revocations after verifying server signature
     final revs = await revocations(group, since: 0);
     var revocationsCount = 0;
     for (final rev in revs) {
-      await store.saveRevocation(rev);
-      revocationsCount++;
+      if (_constantTimeBytesEqual(rev.groupId, group.bytes) &&
+          await rev.verify(pinnedServerKey)) {
+        await store.saveRevocation(rev);
+        revocationsCount++;
+      }
     }
 
-    // 4. Pull missing delta envelopes
-    final localVector = await store.getVersionVector();
+    // 4. Pull missing delta envelopes and enforce group, revocation, clock, and signature checks
+    final localVector = await store.getVersionVector(currentTimeMillis: nowMs);
     final pullRes = await pull(
       group,
       localVector,
@@ -444,7 +465,27 @@ extension GatewayApiSync on GatewayApi {
 
     var pulledCount = 0;
     if (pullRes.envelopes.isNotEmpty) {
-      pulledCount = await store.saveBatch(pullRes.envelopes);
+      final validEnvelopes = <Envelope>[];
+      for (final env in pullRes.envelopes) {
+        if (!_constantTimeBytesEqual(env.core.groupId, group.bytes)) continue;
+        if (await store.isRevoked(env.core.author)) continue;
+        if (!ClockRules.isValidMessageTime(
+          createdAt: env.core.createdAt,
+          expiresAt: env.core.expiresAt,
+          currentTimeMillis: nowMs,
+        )) {
+          continue;
+        }
+        if (await env.verifySignature()) {
+          validEnvelopes.add(env);
+        }
+      }
+      if (validEnvelopes.isNotEmpty) {
+        pulledCount = await store.saveBatch(
+          validEnvelopes,
+          customStoredAt: nowMs,
+        );
+      }
     }
 
     // 5. Download any missing attachment blobs from server
@@ -460,6 +501,7 @@ extension GatewayApiSync on GatewayApi {
           hash: blob.hash,
           mime: blob.mime,
           bytes: blob.bytes,
+          customStoredAt: nowMs,
         );
         if (saved) {
           attachmentsDownloaded++;

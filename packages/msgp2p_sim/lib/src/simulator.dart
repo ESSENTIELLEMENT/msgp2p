@@ -252,7 +252,9 @@ class Simulator {
             final syncRes = await realGatewayClient!.sync(
               store: node.store,
               groupId: scenario.groupId,
+              pinnedServerKey: harness.serverPubkey,
               pendingEnvelopes: allEnvelopes,
+              clock: clock,
             );
             if (syncRes.receiptsCount > 0) {
               harness.recordEvent(MeshTraceEvent(

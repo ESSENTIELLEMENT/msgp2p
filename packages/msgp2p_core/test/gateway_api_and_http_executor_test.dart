@@ -644,4 +644,323 @@ void main() {
       expect(blob.bytes, equals(attBytes));
     });
   });
+
+  group('GatewayApiSync.syncStore cryptographic verification', () {
+    final groupId = GroupId(List.filled(16, 0x77));
+    final otherGroupId = GroupId(List.filled(16, 0x88));
+
+    test('rejects non-32-byte pinnedServerKey', () async {
+      final api = MemoryGatewayApi();
+      final store = MemoryMessageStore();
+      await expectLater(
+        () => api.syncStore(
+          store: store,
+          groupId: groupId,
+          pinnedServerKey: Uint8List(16),
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test(
+        'drops forged or wrong-group receipts, revocations, and invalid/revoked/expired/future envelopes',
+        () async {
+      final ed25519 = Ed25519();
+      final serverKp = await ed25519.newKeyPair();
+      final serverPubkey =
+          Uint8List.fromList((await serverKp.extractPublicKey()).bytes);
+      final attackerServerKp = await ed25519.newKeyPair();
+
+      final aliceKp = await ed25519.newKeyPair();
+      final alicePubkey =
+          Uint8List.fromList((await aliceKp.extractPublicKey()).bytes);
+      final revokedKp = await ed25519.newKeyPair();
+      final revokedPubkey =
+          Uint8List.fromList((await revokedKp.extractPublicKey()).bytes);
+      final innocentKp = await ed25519.newKeyPair();
+      final innocentPubkey =
+          Uint8List.fromList((await innocentKp.extractPublicKey()).bytes);
+
+      final fixedNowMs = 1700000000000;
+      final clock =
+          VirtualClock(DateTime.fromMillisecondsSinceEpoch(fixedNowMs));
+      final groupKey = Uint8List.fromList(List.filled(32, 0x33));
+      final certRef = Uint8List.fromList(List.filled(32, 0x11));
+
+      // Outbound envelope pushed by Alice
+      final pushedEnv = await Envelope.create(
+        groupId: groupId.bytes,
+        keyEpoch: 1,
+        groupKey: groupKey,
+        authorKeyPair: aliceKp,
+        certRef: certRef,
+        seq: 1,
+        customCreatedAt: fixedNowMs,
+        ttl: const Duration(hours: 24),
+        payload: {'type': 'post', 'body': 'outbound'},
+      );
+
+      // Valid inbound envelope authored by innocent member
+      final validPulledEnv = await Envelope.create(
+        groupId: groupId.bytes,
+        keyEpoch: 1,
+        groupKey: groupKey,
+        authorKeyPair: innocentKp,
+        certRef: certRef,
+        seq: 1,
+        customCreatedAt: fixedNowMs,
+        ttl: const Duration(hours: 24),
+        payload: {'type': 'post', 'body': 'valid inbound'},
+      );
+
+      // Tampered signature envelope
+      final tamperedSigEnv = Envelope(
+        core: validPulledEnv.core,
+        sig: Uint8List(64), // invalid zeroed signature
+        certRef: validPulledEnv.certRef,
+      );
+
+      // Wrong-group envelope (valid signature, wrong group_id)
+      final wrongGroupEnv = await Envelope.create(
+        groupId: otherGroupId.bytes,
+        keyEpoch: 1,
+        groupKey: groupKey,
+        authorKeyPair: innocentKp,
+        certRef: certRef,
+        seq: 2,
+        customCreatedAt: fixedNowMs,
+        ttl: const Duration(hours: 24),
+        payload: {'type': 'post', 'body': 'wrong group'},
+      );
+
+      // Envelope authored by revoked member
+      final revokedAuthorEnv = await Envelope.create(
+        groupId: groupId.bytes,
+        keyEpoch: 1,
+        groupKey: groupKey,
+        authorKeyPair: revokedKp,
+        certRef: certRef,
+        seq: 1,
+        customCreatedAt: fixedNowMs,
+        ttl: const Duration(hours: 24),
+        payload: {'type': 'post', 'body': 'from revoked author'},
+      );
+
+      // Expired envelope
+      final expiredEnv = await Envelope.create(
+        groupId: groupId.bytes,
+        keyEpoch: 1,
+        groupKey: groupKey,
+        authorKeyPair: innocentKp,
+        certRef: certRef,
+        seq: 3,
+        customCreatedAt: fixedNowMs - 7200000,
+        ttl: const Duration(hours: 1),
+        payload: {'type': 'post', 'body': 'expired'},
+      );
+
+      // Future-drifted envelope (> 10 minutes ahead)
+      final futureEnv = await Envelope.create(
+        groupId: groupId.bytes,
+        keyEpoch: 1,
+        groupKey: groupKey,
+        authorKeyPair: innocentKp,
+        certRef: certRef,
+        seq: 4,
+        customCreatedAt: fixedNowMs + (15 * 60 * 1000),
+        ttl: const Duration(hours: 24),
+        payload: {'type': 'post', 'body': 'too far in future'},
+      );
+
+      Future<ServerReceipt> signReceipt({
+        required Uint8List gid,
+        required Uint8List author,
+        required int seq,
+        required SimpleKeyPair signer,
+      }) async {
+        final core = ServerReceipt(
+          groupId: gid,
+          author: author,
+          ranges: [SeqRange(seq, seq)],
+          issuedAt: fixedNowMs,
+          serverSig: Uint8List(64),
+        );
+        final sig = await MsgP2PCrypto.sign(core.toCoreCbor(), signer);
+        return ServerReceipt(
+          groupId: core.groupId,
+          author: core.author,
+          ranges: core.ranges,
+          issuedAt: core.issuedAt,
+          serverSig: sig,
+        );
+      }
+
+      Future<RevocationNotice> signRevocation({
+        required Uint8List gid,
+        required Uint8List member,
+        required SimpleKeyPair signer,
+      }) async {
+        final core = RevocationNotice(
+          groupId: gid,
+          memberPubkey: member,
+          revokedAt: fixedNowMs,
+          reason: 'compromised',
+          serverSig: Uint8List(64),
+        );
+        final sig = await MsgP2PCrypto.sign(core.toCoreCbor(), signer);
+        return RevocationNotice(
+          groupId: core.groupId,
+          memberPubkey: core.memberPubkey,
+          revokedAt: core.revokedAt,
+          reason: core.reason,
+          serverSig: sig,
+        );
+      }
+
+      // Forged receipt on push (signed by attackerServerKp) -> must NOT confirm Alice seq 1
+      final forgedPushReceipt = await signReceipt(
+        gid: groupId.bytes,
+        author: alicePubkey,
+        seq: 1,
+        signer: attackerServerKp,
+      );
+      // Wrong-group receipt (signed by legitimate serverKp, but for otherGroupId) -> must be dropped
+      final wrongGroupReceipt = await signReceipt(
+        gid: otherGroupId.bytes,
+        author: alicePubkey,
+        seq: 1,
+        signer: serverKp,
+      );
+      // Forged receipt from receipts() endpoint -> must be dropped
+      final forgedPolledReceipt = await signReceipt(
+        gid: groupId.bytes,
+        author: alicePubkey,
+        seq: 1,
+        signer: attackerServerKp,
+      );
+      // Valid receipt for innocentPubkey seq 1 -> must be accepted
+      final validReceipt = await signReceipt(
+        gid: groupId.bytes,
+        author: innocentPubkey,
+        seq: 1,
+        signer: serverKp,
+      );
+
+      // Forged revocation against innocentPubkey (signed by attackerServerKp) -> must be dropped
+      final forgedRevocation = await signRevocation(
+        gid: groupId.bytes,
+        member: innocentPubkey,
+        signer: attackerServerKp,
+      );
+      // Wrong-group revocation against alicePubkey -> must be dropped
+      final wrongGroupRevocation = await signRevocation(
+        gid: otherGroupId.bytes,
+        member: alicePubkey,
+        signer: serverKp,
+      );
+      // Valid revocation against revokedPubkey -> must be accepted and block revokedAuthorEnv
+      final validRevocation = await signRevocation(
+        gid: groupId.bytes,
+        member: revokedPubkey,
+        signer: serverKp,
+      );
+
+      final maliciousClient = GatewayClient(
+        baseUrl: 'http://untrusted-gateway.local/api/v1',
+        httpExecutor: MockHttpExecutor((method, url, headers, body) async {
+          HttpReply jsonReply(Map<String, dynamic> payload) => HttpReply(
+                statusCode: 200,
+                headers: const {'content-type': 'application/json'},
+                body: Uint8List.fromList(utf8.encode(jsonEncode(payload))),
+              );
+
+          if (url.path.endsWith('/sync/push')) {
+            return jsonReply({
+              'accepted_ids': [pushedEnv.messageIdHex],
+              'rejected': <Map<String, dynamic>>[],
+              'receipts': [
+                {
+                  'raw_cbor_base64':
+                      base64Encode(forgedPushReceipt.toFullCbor())
+                },
+                {
+                  'raw_cbor_base64':
+                      base64Encode(wrongGroupReceipt.toFullCbor())
+                },
+              ],
+            });
+          }
+          if (url.path.endsWith('/sync/receipts')) {
+            return jsonReply({
+              'receipts': [
+                {
+                  'raw_cbor_base64':
+                      base64Encode(forgedPolledReceipt.toFullCbor())
+                },
+                {'raw_cbor_base64': base64Encode(validReceipt.toFullCbor())},
+              ],
+            });
+          }
+          if (url.path.endsWith('/sync/revocations')) {
+            return jsonReply({
+              'revocations': [
+                {
+                  'raw_cbor_base64': base64Encode(forgedRevocation.toFullCbor())
+                },
+                {
+                  'raw_cbor_base64':
+                      base64Encode(wrongGroupRevocation.toFullCbor())
+                },
+                {'raw_cbor_base64': base64Encode(validRevocation.toFullCbor())},
+              ],
+            });
+          }
+          if (url.path.endsWith('/sync/pull')) {
+            return jsonReply({
+              'envelopes': [
+                tamperedSigEnv,
+                wrongGroupEnv,
+                revokedAuthorEnv,
+                expiredEnv,
+                futureEnv,
+                validPulledEnv,
+              ].map((e) => base64Encode(e.toCanonicalCbor())).toList(),
+              'has_more': false,
+            });
+          }
+          return HttpReply(statusCode: 404, body: Uint8List(0));
+        }),
+      );
+
+      final store = MemoryMessageStore();
+      await store.saveEnvelope(pushedEnv, customStoredAt: fixedNowMs);
+
+      final res = await maliciousClient.sync(
+        store: store,
+        groupId: groupId,
+        pinnedServerKey: serverPubkey,
+        pendingEnvelopes: [pushedEnv],
+        clock: clock,
+      );
+
+      // Forged/wrong-group receipts dropped; only validReceipt accepted
+      expect(res.receiptsCount, equals(1));
+      expect(await store.isConfirmed(alicePubkey, 1), isFalse);
+      expect(await store.isConfirmed(innocentPubkey, 1), isTrue);
+
+      // Forged/wrong-group revocations dropped; only validRevocation accepted
+      expect(res.revocationsCount, equals(1));
+      expect(await store.isRevoked(innocentPubkey), isFalse);
+      expect(await store.isRevoked(alicePubkey), isFalse);
+      expect(await store.isRevoked(revokedPubkey), isTrue);
+
+      // Only validPulledEnv saved; tampered, wrong-group, revoked, expired, and future dropped
+      expect(res.pulledCount, equals(1));
+      expect(await store.containsEnvelope(validPulledEnv.messageId), isTrue);
+      expect(await store.containsEnvelope(wrongGroupEnv.messageId), isFalse);
+      expect(await store.containsEnvelope(revokedAuthorEnv.messageId), isFalse);
+      expect(await store.containsEnvelope(expiredEnv.messageId), isFalse);
+      expect(await store.containsEnvelope(futureEnv.messageId), isFalse);
+    });
+  });
 }

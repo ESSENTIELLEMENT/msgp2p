@@ -8,6 +8,7 @@ import '../model/receipt.dart';
 import '../model/revocation.dart';
 import '../model/version_vector.dart';
 import '../storage/message_store.dart';
+import '../sync/clock_rules.dart';
 import 'gateway_api.dart';
 import 'io_http_executor_stub.dart'
     if (dart.library.io) 'io_http_executor.dart';
@@ -397,12 +398,16 @@ class GatewayClient implements GatewayApi {
   Future<SyncResult> sync({
     required MessageStore store,
     required Object groupId,
+    required Uint8List pinnedServerKey,
     List<Envelope>? pendingEnvelopes,
+    Clock? clock,
   }) =>
       syncStore(
         store: store,
         groupId: groupId,
+        pinnedServerKey: pinnedServerKey,
         pendingEnvelopes: pendingEnvelopes,
+        clock: clock,
       );
 
   Future<Map<String, dynamic>> _post(
