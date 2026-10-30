@@ -3,12 +3,16 @@ import 'package:convert/convert.dart';
 import 'package:meta/meta.dart';
 import '../model/certificate.dart';
 import '../storage/message_store.dart';
+import '../gateway/gateway_api.dart';
 
 /// Active group membership context on a multi-tenant device.
 @immutable
 class GroupMembership {
   /// 16-byte UUID of the group.
   final Uint8List groupId;
+
+  /// Structured [GroupId] identifier.
+  GroupId get id => GroupId(groupId);
 
   /// Membership certificate signed by the server authority.
   final MembershipCert cert;

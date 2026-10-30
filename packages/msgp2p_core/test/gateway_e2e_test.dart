@@ -149,6 +149,7 @@ void main() {
       final syncResult = await client.sync(
         store: aliceStore,
         groupId: groupId,
+        pinnedServerKey: aliceLogin.serverPubkey,
         pendingEnvelopes: [sosEnv, bbsEnv],
       );
       expect(syncResult.pushedCount, equals(2));
@@ -172,6 +173,7 @@ void main() {
       final bobSyncResult = await bobClient.sync(
         store: bobStore,
         groupId: groupId,
+        pinnedServerKey: bobLogin.serverPubkey,
       );
       expect(bobSyncResult.pulledCount, equals(2));
 
@@ -212,7 +214,11 @@ void main() {
       expect(await revokeRes.revocation.verify(bobLogin.serverPubkey), isTrue);
 
       // Alice syncs and receives the revocation notice
-      final aliceSync2 = await client.sync(store: aliceStore, groupId: groupId);
+      final aliceSync2 = await client.sync(
+        store: aliceStore,
+        groupId: groupId,
+        pinnedServerKey: aliceLogin.serverPubkey,
+      );
       expect(aliceSync2.revocationsCount, greaterThanOrEqualTo(1));
       expect(await aliceStore.isRevoked(compromisedPk), isTrue);
 
@@ -244,6 +250,7 @@ void main() {
       final aliceAttSync = await client.sync(
         store: aliceStore,
         groupId: groupId,
+        pinnedServerKey: aliceLogin.serverPubkey,
         pendingEnvelopes: [envWithAtt],
       );
       expect(aliceAttSync.acceptedCount, equals(1));
@@ -252,6 +259,7 @@ void main() {
       final bobAttSync = await bobClient.sync(
         store: bobStore,
         groupId: groupId,
+        pinnedServerKey: bobLogin.serverPubkey,
       );
       expect(bobAttSync.pulledCount, equals(1));
       expect(bobAttSync.attachmentsDownloaded, equals(1));

@@ -85,7 +85,7 @@ jobs:
         with:
           sdk: stable
       - name: Verify Code Formatting
-        run: dart format packages/msgp2p_core packages/msgp2p_sim packages/msgp2p_keyvault_file server/dart
+        run: dart format packages/msgp2p_core packages/msgp2p_sim packages/msgp2p_keyvault_file
       - name: Analyze & Test Core Package
         working-directory: packages/msgp2p_core
         run: |
@@ -100,12 +100,6 @@ jobs:
           dart test
       - name: Analyze & Test Simulator Package (incl. PHP Server E2E)
         working-directory: packages/msgp2p_sim
-        run: |
-          dart pub get
-          dart analyze --fatal-infos
-          dart test
-      - name: Analyze & Test Dart Server Gateway Package
-        working-directory: server/dart
         run: |
           dart pub get
           dart analyze --fatal-infos

@@ -143,6 +143,7 @@ class MsgP2PNode {
   final MessageStore store;
   final P2PTransport transport;
   final WifiAwareTransport? wifiAwareTransport;
+  final GatewayApi gateway;
   final GatewayClient gatewayClient;
   final Clock clock;
   final RandomSource randomSource;
@@ -181,6 +182,7 @@ class MsgP2PNode {
     required this.store,
     required this.transport,
     this.wifiAwareTransport,
+    required this.gateway,
     required this.gatewayClient,
     required this.clock,
     required this.randomSource,
@@ -205,6 +207,8 @@ class MsgP2PNode {
     MessageStore? store,
     P2PTransport? transport,
     WifiAwareTransport? wifiAwareTransport,
+    GatewayApi? gateway,
+    HttpExecutor? httpExecutor,
     GatewayClient? gatewayClient,
     Clock? clock,
     RandomSource? randomSource,
@@ -249,15 +253,22 @@ class MsgP2PNode {
       created: created,
     );
     final nodeTransport = transport ?? AndroidBleTransport();
-    final nodeGateway = gatewayClient ??
-        GatewayClient(baseUrl: config.serverEndpoint.toString());
+    final nodeGatewayClient = gatewayClient ??
+        (gateway is GatewayClient
+            ? gateway
+            : GatewayClient(
+                baseUrl: config.serverEndpoint.toString(),
+                httpExecutor: httpExecutor,
+              ));
+    final nodeGateway = gateway ?? nodeGatewayClient;
 
     final node = MsgP2PNode._(
       config: config,
       store: nodeStore,
       transport: nodeTransport,
       wifiAwareTransport: wifiAwareTransport,
-      gatewayClient: nodeGateway,
+      gateway: nodeGateway,
+      gatewayClient: nodeGatewayClient,
       clock: clock ?? const SystemClock(),
       randomSource: rng,
       signingKeyPair: signKp,
@@ -583,7 +594,7 @@ class MsgP2PNode {
         );
   }
 
-  /// Synchronizes unconfirmed messages, receipts, and revocations with the HTTPS gateway (`FR-SRV-02`).
+  /// Synchronizes unconfirmed messages, receipts, and revocations with the configured [GatewayApi] (`FR-SRV-02`).
   Future<SyncResult> syncWithGateway() async {
     final unconfirmed = <Envelope>[];
     for (final env in _knownEnvelopes) {
@@ -592,10 +603,12 @@ class MsgP2PNode {
       }
     }
 
-    final syncRes = await gatewayClient.sync(
+    final syncRes = await gateway.syncStore(
       store: store,
       groupId: config.groupId,
+      pinnedServerKey: config.serverPublicKey,
       pendingEnvelopes: unconfirmed,
+      clock: clock,
     );
 
     await _refreshKnownEnvelopesFromStore();

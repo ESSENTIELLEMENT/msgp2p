@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **`GatewayApi` & `HttpExecutor` ports** (proposal 0001, step 3):
+  - Added `GroupId` 16-byte immutable value type with defensive byte copying, hex string conversions, and strict length validation across all constructors.
+  - Added `HttpReply` and `HttpExecutor` abstract port interface, decoupling gateway HTTP operations from `dart:io` `HttpClient` via conditional export (`io_http_executor_stub.dart` on Web/Wasm, `IoHttpExecutor` on `dart:io`).
+  - Added `MockHttpExecutor` for socket-less unit testing.
+  - Added `GatewayApi` interface port (`push`, `pull`, `receipts`, `revocations`, `uploadAttachment`, `downloadAttachment`) and `GatewayApiSync.syncStore` extension for bidirectional `MessageStore` synchronization over any `GatewayApi` with cryptographic verification of `ServerReceipt`s and `RevocationNotice`s against `pinnedServerKey` and signature, group, revocation, and clock checks on pulled `Envelope`s.
+  - Added `MemoryGatewayApi` in-memory implementation with priority-sorted delta pull, computed `serverVector`, strict `since` filtering, group isolation, and SHA-256 attachment integrity checks.
+  - **Breaking on `GatewayClient`**: `GatewayClient` now implements `GatewayApi` directly (positional `GroupId` / `AttachmentRef` parameters on `push`, `pull`, `uploadAttachment`, `downloadAttachment`; `GatewayClient.sync` requires `pinnedServerKey`; convenience named helpers `pushEnvelopes`, `pullDelta`, `getReceipts`, `getRevocations`, `uploadAttachmentBlob`, `downloadAttachmentBlob` are also provided), verifies downloaded attachment SHA-256 hashes, handles non-JSON error responses cleanly, and accepts an optional host-supplied `HttpExecutor`.
+  - Added `runGatewayApiContractTests` shared contract test suite (`test/gateway_api_contract.dart`), executed against `MemoryGatewayApi`, `GatewayClient` (`MockHttpExecutor`), and `GatewayClient` (`IoHttpExecutor` + `HttpServer`).
+  - Added `messageIdHex` getter to `Envelope` and `EnvelopeCore`, and `id` getter to `GroupMembership`.
+
 ## 1.1.0
 
 - **KeyVault port** (proposal 0001, step 2; Discussion #10): `KeyVault`, `IdentitySeeds`, `KeyVaultLoad`,

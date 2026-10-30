@@ -31,6 +31,9 @@ export 'src/sync/session_state_machine.dart';
 
 export 'src/harness/mesh_harness.dart';
 export 'src/harness/scenario.dart';
+export 'src/gateway/gateway_api.dart';
+export 'src/gateway/io_http_executor_stub.dart'
+    if (dart.library.io) 'src/gateway/io_http_executor.dart';
 export 'src/gateway/gateway_client.dart';
 
 export 'src/framing/broadcast_framing.dart';

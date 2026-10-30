@@ -129,8 +129,8 @@ assertions:
 
       // 3. Verify that pulling directly from the PHP server returns hiker_a's SOS envelope
       final pullRes = await gatewayClient.pull(
-        groupId: 'a0b1c2d3e4f50123456789abcdef0123',
-        vector: VersionVector(),
+        GroupId.from('a0b1c2d3e4f50123456789abcdef0123'),
+        VersionVector(),
       );
       expect(pullRes.envelopes.length, equals(1));
       expect(pullRes.envelopes.first.core.author, equals(hikerA.memberPubkey));
