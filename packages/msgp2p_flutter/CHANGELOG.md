@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- `MsgP2PNode.initialize(membershipSource: ...)` & `refreshMembership()` (proposal 0001, step 4): `MsgP2PNode`
+  now provisions and refreshes its `MembershipCert`, group encryption keys, beacon key, and active server-signed
+  `RevocationNotice`s (§9.1) from a host-supplied `MembershipSource`, verifying signatures and group/public-key
+  bindings against `config.serverPublicKey`. `MsgP2PNode.register` and `MsgP2PNode.login` are deprecated and will
+  be removed in the next minor version.
 - `MsgP2PNode.initialize(gateway: ..., httpExecutor: ...)` (proposal 0001, step 3): `MsgP2PNode` now accepts a
   host-supplied `GatewayApi` or `HttpExecutor` and routes `syncWithGateway()` through `GatewayApiSync.syncStore`.
 - `MsgP2PNode.initialize(keyVault: ...)` (proposal 0001, step 2): the identity comes from a `KeyVault`; the

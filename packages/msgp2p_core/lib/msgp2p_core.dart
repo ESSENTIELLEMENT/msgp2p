@@ -11,6 +11,7 @@ export 'src/framing/crc16.dart';
 export 'src/framing/frame.dart';
 export 'src/identity/identity_guard.dart';
 export 'src/identity/key_vault.dart';
+export 'src/identity/membership_source.dart';
 export 'src/model/certificate.dart';
 export 'src/model/envelope.dart';
 export 'src/model/receipt.dart';

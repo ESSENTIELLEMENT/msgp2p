@@ -1,0 +1,26 @@
+name: msgp2p_reference_auth
+description: MembershipSource adapter for the msgp2p reference server (/auth/register, /auth/login, /sync/revocations).
+version: 0.1.0
+homepage: https://msgp2p.squares.net
+repository: https://github.com/ESSENTIELLEMENT/msgp2p/tree/main/packages/msgp2p_reference_auth
+issue_tracker: https://github.com/ESSENTIELLEMENT/msgp2p/issues
+topics:
+  - dtn
+  - mesh
+  - authentication
+  - cryptography
+publish_to: none
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  convert: ^3.1.1
+  meta: ^1.12.0
+  msgp2p_core:
+    path: ../msgp2p_core
+
+dev_dependencies:
+  cryptography: ^2.7.0
+  lints: ^4.0.0
+  test: ^1.25.0

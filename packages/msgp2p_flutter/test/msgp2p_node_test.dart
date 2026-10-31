@@ -201,5 +201,129 @@ void main() {
       expect(
           bobMsgs.single.status, equals(MessageDeliveryStatus.serverConfirmed));
     });
+
+    test(
+        'provisions via MembershipSource on initialize, refreshes rotated keys & revocations (§9.1), and syncs P2P',
+        () async {
+      final authority = MemoryMembershipSource(
+        serverSigningKeyPair: serverKeyPair,
+      );
+      authority.configureGroup(
+        GroupId(groupId),
+        initialGroupKey: groupKey,
+        initialBeaconKey: Uint8List.fromList(List.filled(32, 0x55)),
+      );
+
+      final nodeAlice = await MsgP2PNode.initialize(
+        config: MsgP2PConfig(
+          serverEndpoint: Uri.parse('http://localhost:8000/api/v1'),
+          serverPublicKey: serverPubkey,
+          groupId: groupId,
+        ),
+        transport: AndroidBleTransport(
+            bridge: bleMedium.createBridge('AA:BB:CC:00:21')),
+        keyVault: MemoryKeyVault(),
+        membershipSource: authority,
+      );
+
+      // Deferred provisioning (offline cold start -> refreshMembership)
+      final nodeBob = await MsgP2PNode.initialize(
+        config: MsgP2PConfig(
+          serverEndpoint: Uri.parse('http://localhost:8000/api/v1'),
+          serverPublicKey: serverPubkey,
+          groupId: groupId,
+        ),
+        transport: AndroidBleTransport(
+            bridge: bleMedium.createBridge('AA:BB:CC:00:22')),
+        keyVault: MemoryKeyVault(),
+        membershipSource: authority,
+        provisionOnInitialize: false,
+      );
+      addTearDown(() async {
+        await nodeAlice.dispose();
+        await nodeBob.dispose();
+      });
+
+      expect(nodeAlice.membershipCert, isNotNull);
+      expect(nodeAlice.currentMembershipGrant, isNotNull);
+      expect(nodeAlice.membershipRefreshAfter, isNotNull);
+      expect(nodeBob.membershipCert, isNull);
+
+      await nodeBob.refreshMembership();
+      expect(nodeBob.membershipCert, isNotNull);
+
+      final initialEpoch = nodeAlice.activeKeyEpoch;
+      await nodeAlice.publish(
+        type: 'bbs_post',
+        body: const {'title': 'Epoch 1 post'},
+      );
+
+      // Revoke a third peer -> authority signs RevocationNotice and rotates group key epoch
+      final revokedPk = Uint8List.fromList(List.filled(32, 0xDE));
+      await authority.revokeMember(
+        GroupId(groupId),
+        revokedPk,
+        reason: 'lost_device',
+      );
+
+      final refreshedGrant = await nodeAlice.refreshMembership();
+      expect(nodeAlice.activeKeyEpoch, greaterThan(initialEpoch));
+      expect(refreshedGrant.revocations, hasLength(1));
+      expect(await nodeAlice.store.isRevoked(revokedPk), isTrue);
+
+      // Alice authors under the rotated epoch; Bob refreshes and syncs P2P
+      await nodeAlice.publish(
+        type: 'sos',
+        body: const {'title': 'Post-rotation SOS'},
+        priority: Priority.sos,
+      );
+      await nodeBob.refreshMembership();
+      expect(await nodeBob.store.isRevoked(revokedPk), isTrue);
+
+      await nodeBob.startMeshRadio();
+      await nodeAlice.startMeshRadio();
+      final p2pRes = await nodeAlice.syncDirectlyWithNode(
+        nodeBob,
+        peerAddress: 'AA:BB:CC:00:22',
+      );
+      expect(p2pRes.completedSuccessfully, isTrue);
+
+      final bobMsgs = await nodeBob.getDecryptedMessages();
+      expect(bobMsgs, hasLength(2));
+      expect(bobMsgs.first.body['title'], equals('Post-rotation SOS'));
+    });
+
+    test(
+        'rejects forged MembershipGrant from untrusted MembershipSource before writing to store',
+        () async {
+      final rogueKp = await MsgP2PCrypto.newKeyPairFromSeed(
+        Uint8List.fromList(List.filled(32, 0xEE)),
+      );
+      final rogueAuthority = MemoryMembershipSource(
+        serverSigningKeyPair: rogueKp,
+      );
+
+      await expectLater(
+        MsgP2PNode.initialize(
+          config: MsgP2PConfig(
+            serverEndpoint: Uri.parse('http://localhost:8000/api/v1'),
+            serverPublicKey: serverPubkey,
+            groupId: groupId,
+          ),
+          transport: AndroidBleTransport(
+            bridge: bleMedium.createBridge('AA:BB:CC:00:31'),
+          ),
+          keyVault: MemoryKeyVault(),
+          membershipSource: rogueAuthority,
+        ),
+        throwsA(
+          isA<MembershipException>().having(
+            (e) => e.kind,
+            'kind',
+            MembershipErrorKind.invalidGrant,
+          ),
+        ),
+      );
+    });
   });
 }

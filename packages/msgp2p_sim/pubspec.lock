@@ -223,6 +223,13 @@ packages:
       path: "../msgp2p_core"
       relative: true
     source: path
+    version: "1.1.0"
+  msgp2p_reference_auth:
+    dependency: "direct main"
+    description:
+      path: "../msgp2p_reference_auth"
+      relative: true
+    source: path
     version: "0.1.0"
   node_preamble:
     dependency: transitive

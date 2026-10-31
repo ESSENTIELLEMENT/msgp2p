@@ -144,6 +144,8 @@ class GatewayClient implements GatewayApi {
         _ownsExecutor = httpExecutor == null;
 
   /// Registers a new member account and obtains initial server-signed membership certificate (FR-SRV-02).
+  @Deprecated(
+      'Use MembershipSource / msgp2p_reference_auth instead (proposal 0001, step 4); removed in the next minor version')
   Future<RegisterResult> register({
     required String username,
     required String password,
@@ -164,6 +166,8 @@ class GatewayClient implements GatewayApi {
   }
 
   /// Authenticates user and obtains access token, certificate, group key and beacon key (FR-SRV-03).
+  @Deprecated(
+      'Use MembershipSource / msgp2p_reference_auth instead (proposal 0001, step 4); removed in the next minor version')
   Future<LoginResult> login({
     required String username,
     required String password,
