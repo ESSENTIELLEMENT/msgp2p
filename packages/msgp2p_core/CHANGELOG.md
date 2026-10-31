@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **`MembershipSource` port & types** (proposal 0001, step 4):
+  - Added `MembershipSource` abstract port, `MemberPublicKeys` (32-byte Ed25519 + X25519 public key value type with `fromSeeds` derivation and constant-time equality), `KeyRole` (`member`, `tracker`), `GrantedKey` (unique positive epoch, role, 32-byte key), `MembershipGrant` (`cert`, `keys`, `beaconKey`, server-signed `revocations` per §9.1, `refreshAfter`, `activeAuthoringKey`, and `verify()` against `pinnedServerKey`), and `MembershipException` (`MembershipErrorKind`).
+  - Added `MemoryMembershipSource` in-memory authority with enrollment, key-epoch rotation (globally unique epochs, §9.4), and server-signed member revocations.
+  - Added `runMembershipSourceContractTests` shared contract test suite (`test/membership_source_contract.dart`).
+  - Deprecated `GatewayClient.register` and `GatewayClient.login` (moved to `package:msgp2p_reference_auth`; kept for one minor version).
 - **`GatewayApi` & `HttpExecutor` ports** (proposal 0001, step 3):
   - Added `GroupId` 16-byte immutable value type with defensive byte copying, hex string conversions, and strict length validation across all constructors.
   - Added `HttpReply` and `HttpExecutor` abstract port interface, decoupling gateway HTTP operations from `dart:io` `HttpClient` via conditional export (`io_http_executor_stub.dart` on Web/Wasm, `IoHttpExecutor` on `dart:io`).

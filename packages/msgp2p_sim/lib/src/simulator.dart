@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:convert/convert.dart';
 import 'package:cryptography/cryptography.dart' as cg;
 import 'package:msgp2p_core/msgp2p_core.dart';
+import 'package:msgp2p_reference_auth/msgp2p_reference_auth.dart';
 import 'event_queue.dart';
 import 'link_profile.dart';
 import 'metrics.dart';
@@ -78,30 +79,33 @@ class Simulator {
       simNodes[sNode.id] = node;
     }
 
-    // If connected to a real GatewayClient, register each simulated node with the server
+    // If connected to a real GatewayClient, provision each simulated node via ReferenceMembershipSource
     if (realGatewayClient != null) {
-      final groupIdHex = hex.encode(scenario.groupId);
+      final group = GroupId(scenario.groupId);
+      final pinnedKey =
+          serverSigningKeyPair != null ? harness.serverPubkey : null;
       for (final node in simNodes.values) {
         final username = '${node.nodeId}_${scenario.seed}';
         const password = 'SimNodePassword2026!';
-        try {
-          await realGatewayClient!.register(
-            username: username,
-            password: password,
-            groupId: groupIdHex,
-            memberPubkey: node.memberPubkey,
-            noisePubkey: node.noisePubkey,
-          );
-        } catch (_) {
-          // Ignore if already registered in a shared test run
-        }
-        final loginRes = await realGatewayClient!.login(
+        final authSource = ReferenceMembershipSource(
+          baseUrl: realGatewayClient!.baseUrl,
           username: username,
           password: password,
+          httpExecutor: realGatewayClient!.httpExecutor,
+          pinnedServerKey: pinnedKey,
+          clock: clock,
+          gatewayClient: realGatewayClient,
+        );
+        final grant = await authSource.fetch(
+          group,
+          MemberPublicKeys(
+            signing: node.memberPubkey,
+            noise: node.noisePubkey,
+          ),
         );
         // Save the server-issued certificate across all nodes so cert_ref is recognized
         for (final peer in simNodes.values) {
-          await peer.store.saveCertificate(loginRes.membershipCert);
+          await peer.store.saveCertificate(grant.cert);
           await peer.store.saveCertificate(node.cert);
         }
       }

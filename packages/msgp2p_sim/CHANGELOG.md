@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Migrated `Simulator` real-gateway E2E provisioning from deprecated `GatewayClient.register`/`login` to `ReferenceMembershipSource` (`package:msgp2p_reference_auth`, proposal 0001, step 4).
+
 ## 1.1.0
 
 - Added `lora_sf7_125k` and `lora_sf11_125k` link profiles to `link_profiles.yaml` and `LinkProfile.named()`.

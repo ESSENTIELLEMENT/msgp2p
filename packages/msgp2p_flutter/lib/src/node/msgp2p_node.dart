@@ -145,6 +145,7 @@ class MsgP2PNode {
   final WifiAwareTransport? wifiAwareTransport;
   final GatewayApi gateway;
   final GatewayClient gatewayClient;
+  final MembershipSource? membershipSource;
   final Clock clock;
   final RandomSource randomSource;
 
@@ -154,6 +155,8 @@ class MsgP2PNode {
   final Uint8List noisePubkey;
 
   MembershipCert? _membershipCert;
+  MembershipGrant? _currentMembershipGrant;
+  DateTime? _membershipRefreshAfter;
   Uint8List? _groupBeaconKey;
   final Map<int, Uint8List> _groupKeysByEpoch = {};
   int _activeKeyEpoch = 1;
@@ -184,6 +187,7 @@ class MsgP2PNode {
     this.wifiAwareTransport,
     required this.gateway,
     required this.gatewayClient,
+    this.membershipSource,
     required this.clock,
     required this.randomSource,
     required this.signingKeyPair,
@@ -210,6 +214,8 @@ class MsgP2PNode {
     GatewayApi? gateway,
     HttpExecutor? httpExecutor,
     GatewayClient? gatewayClient,
+    MembershipSource? membershipSource,
+    bool provisionOnInitialize = true,
     Clock? clock,
     RandomSource? randomSource,
     KeyVault? keyVault,
@@ -269,6 +275,7 @@ class MsgP2PNode {
       wifiAwareTransport: wifiAwareTransport,
       gateway: nodeGateway,
       gatewayClient: nodeGatewayClient,
+      membershipSource: membershipSource,
       clock: clock ?? const SystemClock(),
       randomSource: rng,
       signingKeyPair: signKp,
@@ -291,12 +298,22 @@ class MsgP2PNode {
       node._groupBeaconKey = initialBeaconKey;
     }
 
+    if (membershipSource != null && provisionOnInitialize) {
+      await node.refreshMembership();
+    }
+
     return node;
   }
 
   MembershipCert? get membershipCert => _membershipCert;
+  MembershipGrant? get currentMembershipGrant => _currentMembershipGrant;
+  DateTime? get membershipRefreshAfter => _membershipRefreshAfter;
   int get activeKeyEpoch => _activeKeyEpoch;
   String get memberShortId => hex.encode(memberPubkey).substring(0, 8);
+
+  /// Public keys (Ed25519 signing + X25519 Noise) derived from this node's identity.
+  MemberPublicKeys get memberPublicKeys =>
+      MemberPublicKeys(signing: memberPubkey, noise: noisePubkey);
 
   /// Stream of all decrypted messages ordered by SOS priority then newest first.
   Stream<List<DecryptedMessage>> get messagesStream =>
@@ -312,11 +329,73 @@ class MsgP2PNode {
     return list;
   }
 
+  /// Fetches and applies a verified [MembershipGrant] from [source] (or the configured
+  /// [membershipSource]) (`FR-ID-02`, `FR-SEC-02`; Proposal 0001, Step 4 & §9.1).
+  Future<MembershipGrant> refreshMembership({MembershipSource? source}) async {
+    final effectiveSource = source ?? membershipSource;
+    if (effectiveSource == null) {
+      throw StateError(
+        'No MembershipSource configured on MsgP2PNode; pass one to initialize() or refreshMembership(source: ...)',
+      );
+    }
+    final grant = await effectiveSource.fetch(
+      GroupId(config.groupId),
+      memberPublicKeys,
+    );
+    await applyMembershipGrant(grant);
+    return grant;
+  }
+
+  /// Cryptographically verifies [grant] against `config.serverPublicKey`, `config.groupId`, and
+  /// [memberPublicKeys], then persists the certificate, active revocations (§9.1), group keys,
+  /// and beacon key.
+  Future<void> applyMembershipGrant(MembershipGrant grant) async {
+    final expectedGroup = GroupId(config.groupId);
+    await grant.verify(
+      expectedGroup: expectedGroup,
+      expectedKeys: memberPublicKeys,
+      pinnedServerKey: config.serverPublicKey,
+      clock: clock,
+    );
+    if (await store.isRevoked(memberPubkey)) {
+      throw const MembershipException(
+        MembershipErrorKind.revoked,
+        'Local member signing key is marked revoked in MessageStore',
+      );
+    }
+
+    if (await grant.cert.verify(config.serverPublicKey)) {
+      await store.saveCertificate(grant.cert);
+    }
+    for (final rev in grant.revocations) {
+      if (await rev.verify(config.serverPublicKey)) {
+        await store.saveRevocation(rev);
+      }
+    }
+
+    _membershipCert = grant.cert;
+    _groupBeaconKey = grant.beaconKey;
+    for (final k in grant.keys) {
+      _groupKeysByEpoch[k.epoch] = k.key;
+    }
+    final authoringKey = grant.activeAuthoringKey;
+    if (authoringKey != null) {
+      _activeKeyEpoch = authoringKey.epoch;
+    }
+    _membershipRefreshAfter = grant.refreshAfter;
+    _currentMembershipGrant = grant;
+
+    await _emitUpdatedMessages();
+  }
+
   /// Registers this device's Ed25519 & X25519 public keys with the group server (FR-ID-02).
+  @Deprecated(
+      'Pass a MembershipSource to initialize or call refreshMembership() (proposal 0001, step 4); removed in the next minor version')
   Future<RegisterResult> register({
     required String username,
     required String password,
   }) async {
+    // ignore: deprecated_member_use
     return gatewayClient.register(
       username: username,
       password: password,
@@ -327,12 +406,22 @@ class MsgP2PNode {
   }
 
   /// Authenticates with the server and provisions membership certificate + group keys (FR-ID-02, FR-SEC-02).
+  @Deprecated(
+      'Pass a MembershipSource to initialize or call refreshMembership() (proposal 0001, step 4); removed in the next minor version')
   Future<LoginResult> login({
     required String username,
     required String password,
   }) async {
+    // ignore: deprecated_member_use
     final res =
+        // ignore: deprecated_member_use
         await gatewayClient.login(username: username, password: password);
+    if (!await res.membershipCert.verify(config.serverPublicKey)) {
+      throw const MembershipException(
+        MembershipErrorKind.invalidGrant,
+        'Certificate signature verification failed against serverPublicKey',
+      );
+    }
     _membershipCert = res.membershipCert;
     _groupBeaconKey = res.groupBeaconKey;
     await store.saveCertificate(res.membershipCert);

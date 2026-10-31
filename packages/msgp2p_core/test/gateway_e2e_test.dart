@@ -69,7 +69,8 @@ void main() {
       final bobNoisePk = Uint8List.fromList(hex.decode(
           '5b688c9741b9d511d5b03b8fa7db05d1db2d45a18088c9e8c51b437973c2937f'));
 
-      // 2. Register Alice and Bob
+      // 2. Register Alice and Bob (verifies backwards-compatible deprecated methods)
+      // ignore: deprecated_member_use_from_same_package
       final aliceReg = await client.register(
         username: 'alice_e2e',
         password: 'passwordAlice123!',
@@ -80,6 +81,7 @@ void main() {
       expect(aliceReg.status, equals('ACTIVE'));
       expect(aliceReg.userId, startsWith('usr_'));
 
+      // ignore: deprecated_member_use_from_same_package
       final bobReg = await client.register(
         username: 'bob_e2e',
         password: 'passwordBob123!',
@@ -90,6 +92,7 @@ void main() {
       expect(bobReg.status, equals('ACTIVE'));
 
       // 3. Login as Alice
+      // ignore: deprecated_member_use_from_same_package
       final aliceLogin = await client.login(
         username: 'alice_e2e',
         password: 'passwordAlice123!',
@@ -161,6 +164,7 @@ void main() {
       expect(await aliceStore.isConfirmed(alicePk, 2), isTrue);
 
       // 6. Bob logs in and synchronizes with empty local store
+      // ignore: deprecated_member_use_from_same_package
       final bobLogin = await client.login(
         username: 'bob_e2e',
         password: 'passwordBob123!',
